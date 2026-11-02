@@ -10,6 +10,38 @@ let currentStrengthMode = "STANDARD";
 let currentExecutionMode = "AUTO";
 let currentAction = "";
 
+// ================= LOGIKA DARK / LIGHT MODE =================
+function toggleTheme() {
+    const body = document.body;
+    const themeIcon = document.getElementById('theme-icon');
+    
+    body.classList.toggle('light-mode');
+
+    if (body.classList.contains('light-mode')) {
+        themeIcon.innerHTML = `<circle cx="12" cy="12" r="5"></circle>
+                               <line x1="12" y1="1" x2="12" y2="3"></line>
+                               <line x1="12" y1="21" x2="12" y2="23"></line>
+                               <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                               <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                               <line x1="1" y1="12" x2="3" y2="12"></line>
+                               <line x1="21" y1="12" x2="23" y2="12"></line>
+                               <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                               <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>`;
+        localStorage.setItem('theme', 'light');
+    } else {
+        themeIcon.innerHTML = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>`;
+        localStorage.setItem('theme', 'dark');
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        toggleTheme();
+    }
+});
+
+// ================= PROTOCOL SWITCHER =================
 function switchProtocol(mode) {
     currentProtocol = mode;
     if (mode === "BLE") {
@@ -58,11 +90,11 @@ function setupBLENotifications(characteristic) {
     });
 }
 
-// ================= MQTT LOGIC (FIXED WEBSOCKET SSL) =================
+// ================= MQTT LOGIC =================
 function toggleMQTT() {
     if (!mqttClient || !mqttClient.isConnected()) {
         const broker = "broker.hivemq.com";
-        const port = 8884; // SSL WebSocket Port
+        const port = 8884;
         const path = "/mqtt";
         
         mqttClient = new Paho.MQTT.Client(broker, port, path, "web_client_" + parseInt(Math.random() * 10000, 10));
@@ -119,13 +151,13 @@ function sendData(payload) {
     }
 }
 
-// ================= MODE SELECTOR (DUAL ACTIVE) =================
+// ================= MODE SELECTOR =================
 function selectMode(mode, btn) {
     const strengthModes = ['SOFT', 'STRONG', 'STANDARD', 'SPEED'];
     const executionModes = ['AUTO', 'STOP'];
 
     if (strengthModes.includes(mode)) {
-        document.querySelectorAll('.strength-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.strength-card').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentStrengthMode = mode;
         
@@ -201,11 +233,11 @@ function triggerAction(action) {
     }
 }
 
-// ================= NOTIFIKASI SUARA & GETAR =================
-function playCompletionSound() {
+// ================= NADA AUDIO DINAMIS & NOTIFIKASI PER STAGE =================
+function playSoundTone(type) {
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const playBeep = (freq, startTime, duration) => {
+        const playTone = (freq, startTime, duration) => {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = 'sine';
@@ -216,24 +248,43 @@ function playCompletionSound() {
             osc.stop(startTime + duration);
         };
         const now = audioCtx.currentTime;
-        playBeep(523.25, now, 0.15);       // Note C5
-        playBeep(659.25, now + 0.2, 0.15); // Note E5
-        playBeep(783.99, now + 0.4, 0.35); // Note G5
+
+        if (type === 'fill_done') {
+            playTone(523.25, now, 0.15);
+            playTone(783.99, now + 0.18, 0.2);
+        } 
+        else if (type === 'wash_done') {
+            playTone(440.00, now, 0.1);
+            playTone(523.25, now + 0.12, 0.1);
+            playTone(659.25, now + 0.24, 0.15);
+        } 
+        else if (type === 'all_done') {
+            playTone(523.25, now, 0.15);
+            playTone(659.25, now + 0.18, 0.15);
+            playTone(783.99, now + 0.36, 0.15);
+            playTone(1046.50, now + 0.54, 0.3);
+        }
     } catch (e) {
         console.error("Audio Web error:", e);
     }
 }
 
-function triggerVibration() {
+function triggerVibration(pattern = [300, 150, 300]) {
     if ("vibrate" in navigator) {
-        navigator.vibrate([500, 200, 500]);
+        navigator.vibrate(pattern);
     }
 }
 
-function triggerMachineFinishNotification() {
-    playCompletionSound();
-    triggerVibration();
-    document.getElementById("finish-modal").style.display = "flex";
+function triggerStepNotification(titleText, messageText, soundType, vibPattern) {
+    playSoundTone(soundType);
+    triggerVibration(vibPattern);
+
+    const modal = document.getElementById("finish-modal");
+    if (modal) {
+        modal.querySelector("h2").innerText = titleText;
+        modal.querySelector("p").innerText = messageText;
+        modal.style.display = "flex";
+    }
 }
 
 function closeFinishModal() {
@@ -257,14 +308,43 @@ function parseRealtimeData(dataString) {
         else if (key === 'STATUS') {
             document.getElementById('process-display').innerText = value;
             
-            if ((value === 'STANDBY' || value === 'DONE') && (previousStatus === 'WASH' || previousStatus === 'SPIN' || previousStatus === 'AUTO')) {
-                document.getElementById('wash-btn').classList.remove('active-action');
-                document.getElementById('spin-btn').classList.remove('active-action');
-                currentAction = "";
-                triggerMachineFinishNotification();
-            }
+            if (previousStatus !== value) {
+                if (previousStatus === 'FILLING' && value === 'WASH') {
+                    triggerStepNotification(
+                        "AIR PENUH!", 
+                        "Pengisian air selesai. Proses pencucian dimulai.", 
+                        'fill_done', 
+                        [200, 100, 200]
+                    );
+                }
+                else if (previousStatus === 'WASH' && (value === 'DRAINING' || value === 'SPIN')) {
+                    triggerStepNotification(
+                        "TAHAP CUCI SELESAI!", 
+                        "Proses pencucian pakaian telah tuntas. Melanjutkan ke pembuangan air.", 
+                        'wash_done', 
+                        [300, 100, 300]
+                    );
+                }
+                else if ((previousStatus === 'SPIN' || previousStatus === 'WASH' || previousStatus === 'AUTO') && (value === 'STANDBY' || value === 'DONE')) {
+                    document.getElementById('wash-btn').classList.remove('active-action');
+                    document.getElementById('spin-btn').classList.remove('active-action');
+                    
+                    document.querySelectorAll('.exec-btn').forEach(b => b.classList.remove('active'));
+                    const autoBtn = document.querySelector('.auto-btn');
+                    if(autoBtn) autoBtn.classList.add('active');
 
-            previousStatus = value;
+                    currentAction = "";
+                    
+                    triggerStepNotification(
+                        "PROSES SELESAI!", 
+                        "Seluruh rangkaian pencucian & pengeringan telah tuntas secara aman. Mesin kembali ke STANDBY.", 
+                        'all_done', 
+                        [500, 200, 500, 200, 500]
+                    );
+                }
+                
+                previousStatus = value;
+            }
         }
     });
 }
