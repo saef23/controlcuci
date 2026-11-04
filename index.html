@@ -11,23 +11,9 @@
 <body>
     <div class="container">
         <h1>Smart Washing Machine</h1>
-        
-        <!-- Status Box -->
-        <div id="status-box" class="status-idle">
-            Status: <span id="statusLabel">IDLE</span>
-        </div>
+        <div id="status-box" class="status-idle">Status: <span id="statusLabel">IDLE</span></div>
 
-        <!-- Bagian Kontrol Daya Utama AC (220V) -->
-        <div class="card-section">
-            <h2>Power Utama AC (220V)</h2>
-            <div class="button-grid">
-                <button class="btn btn-power-on" onclick="sendPower('ON')">POWER ON</button>
-                <button class="btn btn-power-off" onclick="sendPower('OFF')">POWER OFF</button>
-            </div>
-        </div>
-
-        <!-- Bagian Pilihan Profil Cucian (Manual Mode + Profil) -->
-        <div class="card-section">
+        <div class="control-section">
             <h2>Pilih Jenis Cucian (Manual Mode)</h2>
             <div class="button-grid">
                 <button class="btn profile-speedy" onclick="sendProfile('SPEEDY')">Speedy (Cepat)</button>
@@ -37,16 +23,6 @@
             </div>
         </div>
 
-        <!-- Bagian Kontrol Manual Tahap / Aksi Tambahan -->
-        <div class="card-section">
-            <h2>Kontrol Tahap Manual</h2>
-            <div class="button-grid">
-                <button class="btn btn-action" onclick="sendAction('DRAIN')">Buang Air (Drain)</button>
-                <button class="btn btn-action" onclick="sendAction('SPIN')">Peras (Spin)</button>
-            </div>
-        </div>
-
-        <!-- Bagian Tombol Darurat -->
         <div class="emergency-section">
             <button class="btn btn-stop" onclick="stopMachine()">STOP / DARURAT</button>
         </div>
