@@ -3,31 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Washing Machine Control</title>
+    <title>Smart Washing Machine</title>
     <link rel="stylesheet" href="style.css">
-    <!-- MQTT Library CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Smart Washing Machine</h1>
-        <div id="status-box" class="status-idle">Status: <span id="statusLabel">IDLE</span></div>
-
-        <div class="control-section">
-            <h2>Pilih Jenis Cucian (Manual Mode)</h2>
-            <div class="button-grid">
-                <button class="btn profile-speedy" onclick="sendProfile('SPEEDY')">Speedy (Cepat)</button>
-                <button class="btn profile-standard" onclick="sendProfile('STANDARD')">Standard (Harian)</button>
-                <button class="btn profile-strong" onclick="sendProfile('STRONG')">Strong (Kuat/Kotor)</button>
-                <button class="btn profile-soft" onclick="sendProfile('SOFT')">Soft (Lembut)</button>
-            </div>
+        <h2>Kontrol Mesin Cuci</h2>
+        <div id="statusLabel">STATUS: IDLE</div>
+        
+        <div class="btn-group">
+            <button onclick="sendCommand('MANUAL:SPEEDY')">Speedy</button>
+            <button onclick="sendCommand('MANUAL:STANDARD')">Standard</button>
+            <button onclick="sendCommand('MANUAL:STRONG')">Strong</button>
+            <button onclick="sendCommand('MANUAL:SOFT')">Soft</button>
         </div>
-
-        <div class="emergency-section">
-            <button class="btn btn-stop" onclick="stopMachine()">STOP / DARURAT</button>
-        </div>
+        
+        <button class="btn-stop" onclick="sendCommand('MODE:STOP')">STOP</button>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
