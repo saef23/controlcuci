@@ -3,482 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Control Machine Wash</title>
-    <!-- Library MQTT Paho WebSocket -->
+    <title>Kontrol Mesin Cuci MQTT</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Paho MQTT Web Client -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
-    <style>
-        :root {
-            --bg-color: #121212;
-            --card-bg: #1e1e1e;
-            --text-color: #ffffff;
-            --text-secondary: #b0b0b0;
-            --accent-color: #3498db;
-            --accent-hover: #2980b9;
-            --border-color: #333333;
-            --danger-color: #e74c3c;
-            --success-color: #27ae60;
-        }
-
-        body.light-mode {
-            --bg-color: #f4f7f6;
-            --card-bg: #ffffff;
-            --text-color: #333333;
-            --text-secondary: #666666;
-            --border-color: #e0e0e0;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            transition: background 0.3s, color 0.3s;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 420px;
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-        }
-
-        .header-wrapper {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        h1 {
-            font-size: 15px;
-            margin: 0;
-            letter-spacing: 0.5px;
-        }
-
-        .theme-toggle-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: var(--text-color);
-            padding: 5px;
-            display: flex;
-            align-items: center;
-        }
-
-        .theme-toggle-btn svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        .status-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--bg-color);
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-size: 13px;
-            border: 1px solid var(--border-color);
-        }
-
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: #e74c3c;
-        }
-
-        .indicator.connected {
-            background-color: #2ecc71;
-            box-shadow: 0 0 8px #2ecc71;
-        }
-
-        .status-bar button {
-            background: var(--accent-color);
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .control-group {
-            margin-bottom: 15px;
-        }
-
-        .section-title {
-            font-size: 11px;
-            font-weight: bold;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-            letter-spacing: 0.5px;
-        }
-
-        .display-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 15px;
-        }
-
-        .card-box {
-            background: var(--bg-color);
-            padding: 10px;
-            border-radius: 10px;
-            text-align: center;
-            border: 1px solid var(--border-color);
-        }
-
-        .card-box .label {
-            font-size: 10px;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-
-        .card-box .value {
-            font-size: 13px;
-            font-weight: bold;
-        }
-
-        .strength-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
-
-        .strength-card {
-            background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 12px 6px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            color: var(--text-color);
-            transition: 0.2s;
-        }
-
-        .strength-card.active {
-            border-color: var(--accent-color);
-            background: rgba(52, 152, 219, 0.1);
-            color: var(--accent-color);
-        }
-
-        .mode-icon {
-            width: 18px;
-            height: 18px;
-        }
-
-        .strength-card span {
-            font-size: 9px;
-            font-weight: bold;
-        }
-
-        .slider-container {
-            background: var(--bg-color);
-            padding: 12px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border: 1px solid var(--border-color);
-        }
-
-        .slider-header {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            margin-bottom: 8px;
-            color: var(--text-secondary);
-        }
-
-        input[type="range"] {
-            width: 100%;
-            accent-color: var(--accent-color);
-            cursor: pointer;
-        }
-
-        .main-control-panel {
-            background: var(--bg-color);
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid var(--border-color);
-        }
-
-        .circle-buttons-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
-
-        .circle-btn {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 10px 4px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            cursor: pointer;
-            color: var(--text-color);
-            transition: 0.2s;
-        }
-
-        .circle-btn.active, .circle-btn.active-action {
-            border-color: var(--accent-color);
-            background: rgba(52, 152, 219, 0.15);
-            color: var(--accent-color);
-        }
-
-        .stop-btn.active {
-            border-color: var(--danger-color);
-            background: rgba(231, 76, 60, 0.15);
-            color: var(--danger-color);
-        }
-
-        .btn-icon {
-            width: 18px;
-            height: 18px;
-        }
-
-        .circle-btn span {
-            font-size: 9px;
-            font-weight: bold;
-        }
-    </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header & Theme Toggle -->
-        <div class="header-wrapper">
-            <h1>SMART CONTROL MACHINE WASH</h1>
-            <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Ubah Tema">
-                <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                </svg>
-            </button>
-        </div>
 
-        <!-- Bar Status MQTT -->
-        <div id="mqtt-bar" class="status-bar">
-            <div class="status-item">
-                <div id="mqtt-indicator" class="indicator"></div>
-                <span id="mqtt-text">MQTT: Terputus</span>
-            </div>
-            <button id="mqtt-btn" onclick="toggleMQTT()">Konek MQTT</button>
-        </div>
+<div class="card">
+    <div class="header">
+        <h2>Smart Washer Dashboard</h2>
+        <div class="connection-status" id="statusKoneksi">MQTT: OFF</div>
+    </div>
 
-        <!-- Panel Kontrol Power Utama AC (220V) -->
-        <div class="control-group">
-            <div class="section-title">POWER UTAMA AC (220V)</div>
-            <div class="button-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <button class="strength-card" style="background-color: #27ae60; color: white; border:none;" onclick="sendPower('ON')">
-                    <span>POWER ON</span>
-                </button>
-                <button class="strength-card" style="background-color: #7f8c8d; color: white; border:none;" onclick="sendPower('OFF')">
-                    <span>POWER OFF</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Display Status & Proses -->
-        <div class="display-section">
-            <div class="card-box">
-                <div class="label">Kondisi / Status Sistem</div>
-                <div id="process-display" class="value">STANDBY (AC OFF)</div>
-            </div>
-            <div class="card-box">
-                <div class="label">Profil / Mode Aktif</div>
-                <div id="profile-display" class="value">STANDARD</div>
-            </div>
-        </div>
-
-        <!-- Mode Kekuatan Pencucian -->
-        <div class="control-group">
-            <div class="section-title">PROFIL / KEKUATAN PENCUCIAN</div>
-            <div class="strength-grid">
-                <button class="strength-card" onclick="selectProfile('SOFT', this)">
-                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L3 13.5V21h7.5l9.74-9.76z"></path></svg>
-                    <span>SOFT</span>
-                </button>
-                <button class="strength-card active" onclick="selectProfile('STANDARD', this)">
-                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
-                    <span>STANDARD</span>
-                </button>
-                <button class="strength-card" onclick="selectProfile('STRONG', this)">
-                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"></path></svg>
-                    <span>STRONG</span>
-                </button>
-                <button class="strength-card" onclick="selectProfile('SPEED', this)">
-                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    <span>SPEED</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Slider Durasi Cuci -->
-        <div class="slider-container">
-            <div class="slider-header">
-                <span>DURASI PENCUCIAN KUSTOM</span>
-                <span id="slider-val">600 Detik (10:00)</span>
-            </div>
-            <input type="range" id="control-slider" min="60" max="1800" value="600" step="30" oninput="updateSlider(this.value)" onchange="sendSliderData(this.value)">
-        </div>
-
-        <!-- Panel Eksekusi Utama -->
-        <div class="main-control-panel">
-            <div class="section-title">EKSEKUSI UTAMA</div>
-            <div class="circle-buttons-grid">
-                <button id="wash-btn" class="circle-btn action-btn" onclick="triggerAction('WASH')">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
-                    <span>WASH</span>
-                </button>
-                <button id="spin-btn" class="circle-btn action-btn" onclick="triggerAction('SPIN')">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                    <span>SPIN</span>
-                </button>
-                <button class="circle-btn auto-btn exec-btn active" onclick="triggerAction('AUTO')">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                    <span>AUTO</span>
-                </button>
-                <button class="circle-btn stop-btn exec-btn" onclick="triggerAction('STOP')">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
-                    <span>STOP</span>
-                </button>
-            </div>
+    <!-- MAIN MONITORING RING DISPLAY -->
+    <div class="ring-container">
+        <svg class="progress-ring" width="200" height="200">
+            <circle class="progress-ring-bg" stroke="#2a2a2a" stroke-width="12" fill="transparent" r="85" cx="100" cy="100"/>
+            <circle class="progress-ring-circle" id="circleProgress" stroke="#00e676" stroke-width="12" stroke-dasharray="534" stroke-dashoffset="534" stroke-linecap="round" fill="transparent" r="85" cx="100" cy="100"/>
+        </svg>
+        <div class="ring-content">
+            <span class="step-label" id="namaProsesAktif">STANDBY</span>
+            <span class="step-timer" id="prosesStepTimer">0s</span>
+            <span class="lap-timer" id="totalLapTimer">Total: 00:00</span>
         </div>
     </div>
 
-    <script>
-        let mqttClient;
-        const broker = "broker.hivemq.com";
-        const port = 8884; // WebSocket Port HiveMQ
-        const path = "/mqtt";
-        const topicCommand = "mesincuci/command";
-        const topicStatus = "mesincuci/status";
+    <!-- HARDWARE MONITORING GRID (WATER LEVEL & RELAY) -->
+    <div class="hardware-grid">
+        <div class="hw-item" id="hwWater">
+            <span class="hw-title">WATER</span>
+            <span class="hw-status" id="statusWaterVal">-</span>
+        </div>
+        <div class="hw-item" id="hwInlet">
+            <span class="hw-title">INLET</span>
+            <span class="hw-status" id="statusInletVal">OFF</span>
+        </div>
+        <div class="hw-item" id="hwDrain">
+            <span class="hw-title">DRAIN</span>
+            <span class="hw-status" id="statusDrainVal">OFF</span>
+        </div>
+        <div class="hw-item" id="hwMotor">
+            <span class="hw-title">MOTOR</span>
+            <span class="hw-status" id="statusMotorVal">OFF</span>
+        </div>
+    </div>
 
-        // ================= DARK / LIGHT MODE =================
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
-            const isLight = document.body.classList.contains('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-        }
+    <!-- TOMBOL KONEKSI MQTT -->
+<button class="btn-connect" onclick="connectMQTT()">hubungkan ke MQTT</button>
 
-        window.addEventListener('DOMContentLoaded', () => {
-            if (localStorage.getItem('theme') === 'light') {
-                document.body.classList.add('light-mode');
-            }
-        });
+    <h3>PILIH MODE CUCI</h3>
+    <div class="circle-buttons-grid">
+        <div class="circle-btn-wrapper" onclick="kirimPerintah('CMD:1')">
+            <button class="btn-circle btn-mode1">
+                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12.5,7V12.25L16.5,14.75L15.75,15.85L11,13V7H12.5Z"/></svg>
+            </button>
+            <span class="btn-label">Cepat (5m)</span>
+        </div>
 
-        // ================= MQTT CONNECTION =================
-        function toggleMQTT() {
-            if (!mqttClient || !mqttClient.isConnected()) {
-                mqttClient = new Paho.MQTT.Client(broker, port, path, "web_client_" + parseInt(Math.random() * 10000, 10));
+        <div class="circle-btn-wrapper" onclick="kirimPerintah('CMD:2')">
+            <button class="btn-circle btn-mode2">
+                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z"/></svg>
+            </button>
+            <span class="btn-label">Normal (10m)</span>
+        </div>
 
-                mqttClient.onConnectionLost = (responseObject) => {
-                    document.getElementById('mqtt-indicator').classList.remove('connected');
-                    document.getElementById('mqtt-text').innerText = 'MQTT: Terputus';
-                    document.getElementById('mqtt-btn').innerText = 'Konek MQTT';
-                };
+        <div class="circle-btn-wrapper" onclick="kirimPerintah('CMD:3')">
+            <button class="btn-circle btn-mode3">
+                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 22,12.5V13A10,10 0 0,1 12,23A10,10 0 0,1 2,13V12.5A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12V12.5A8,8 0 0,0 12,20A8,8 0 0,0 20,12.5V12A8,8 0 0,0 12,4M11,7H13V13H11V7M11,15H13V17H11V15Z"/></svg>
+            </button>
+            <span class="btn-label">Berat (15m)</span>
+        </div>
 
-                mqttClient.onMessageArrived = (message) => {
-                    parseRealtimeStatus(message.payloadString);
-                };
+        <div class="circle-btn-wrapper" onclick="kirimPerintah('CMD:4')">
+            <button class="btn-circle btn-spin">
+                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12,6V9L16,5L12,1V4A8,8 0 0,0 4,12C4,13.57 4.46,15.03 5.24,16.26L6.7,14.8C6.25,13.97 6,13.01 6,12A6,6 0 0,1 12,6M18.76,7.74L17.3,9.2C17.75,10.03 18,10.99 18,12A6,6 0 0,1 12,18V15L8,19L12,23V20A8,8 0 0,0 20,12C20,10.43 19.54,8.97 18.76,7.74Z"/></svg>
+            </button>
+            <span class="btn-label">Spin Only</span>
+        </div>
+    </div>
 
-                const options = {
-                    useSSL: true,
-                    timeout: 5,
-                    onSuccess: () => {
-                        document.getElementById('mqtt-indicator').classList.add('connected');
-                        document.getElementById('mqtt-text').innerText = 'MQTT: Terhubung';
-                        document.getElementById('mqtt-btn').innerText = 'Putus';
-                        mqttClient.subscribe(topicStatus);
-                    },
-                    onFailure: (err) => {
-                        alert("Gagal konek ke MQTT Broker: " + err.errorMessage);
-                    }
-                };
-                mqttClient.connect(options);
-            } else {
-                mqttClient.disconnect();
-                document.getElementById('mqtt-indicator').classList.remove('connected');
-                document.getElementById('mqtt-text').innerText = 'MQTT: Terputus';
-                document.getElementById('mqtt-btn').innerText = 'Konek MQTT';
-            }
-        }
+    <!-- Tombol Stop Darurat -->
+    <button class="btn-stop" onclick="kirimPerintah('CMD:STOP')">STOP DARURAT (X)</button>
 
-        // ================= MQTT SENDER =================
-        function sendMQTT(payload) {
-            if (mqttClient && mqttClient.isConnected()) {
-                const message = new Paho.MQTT.Message(payload);
-                message.destinationName = topicCommand;
-                mqttClient.send(message);
-                console.log("MQTT Sent:", payload);
-            } else {
-                alert("MQTT belum terhubung! Klik 'Konek MQTT' terlebih dahulu.");
-            }
-        }
+    <div class="log-box" id="logTerminal">
+        [System] Menunggu koneksi MQTT...<br>
+    </div>
+</div>
 
-        // ================= COMMAND CONTROLS =================
-        function sendPower(state) {
-            sendMQTT("POWER:" + state);
-        }
-
-        function selectProfile(profile, btn) {
-            document.querySelectorAll('.strength-card').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('profile-display').innerText = profile;
-            sendMQTT(profile);
-        }
-
-        function formatTime(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            return `${mins}M ${secs}S`;
-        }
-
-        function updateSlider(val) {
-            document.getElementById('slider-val').innerText = `${val} Detik (${formatTime(val)})`;
-        }
-
-        function sendSliderData(val) {
-            sendMQTT("DURATION:" + val);
-        }
-
-        function triggerAction(action) {
-            if (action === 'AUTO') {
-                sendMQTT('AUTO');
-            } else if (action === 'STOP') {
-                sendMQTT('STOP');
-            } else if (action === 'WASH') {
-                sendMQTT('WASH');
-            } else if (action === 'SPIN') {
-                sendMQTT('SPIN');
-            }
-        }
-
-        // ================= RECEIVE STATUS PARSER =================
-        function parseRealtimeStatus(statusMsg) {
-            console.log("Status dari Mesin:", statusMsg);
-            if (statusMsg.startsWith("STATUS:")) {
-                document.getElementById('process-display').innerText = statusMsg.replace("STATUS:", "");
-            }
-        }
-    </script>
+<script src="script.js"></script>
 </body>
 </html>
