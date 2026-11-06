@@ -1,238 +1,54 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-// Config Wi-Fi & Broker MQTT
-const char* ssid = "Wokwi-GUEST"; 
-const char* password = "";
+const char* ssid        = "realme C75";
+const char* password    = "123456789";
 const char* mqtt_server = "broker.hivemq.com";
+const int   mqtt_port   = 1883;
+
+const char* topic_command = "mesincuci/command";
+const char* topic_status  = "mesincuci/status";
 
 WiFiClient espClient;
-PubSubClient mqttClient(espClient);
+PubSubClient client(espClient);
 
-// Hardware Pin Configuration (4 Relay)
-const int RELAY_INLET_WATER  = 18; // Relay Air Masuk
-const int RELAY_DRAIN_VALVE  = 19; // Relay Kuras/Drain
-const int RELAY_WASH_CW     = 21; // Relay Putaran Kanan (Juga dipakai SPIN)
-const int RELAY_WASH_CCW    = 22; // Relay Putaran Kiri
-const int SENSOR_WATER_LEVEL = 34; // LOW = Kosong, HIGH = Penuh
+// Variabel filter anti-bounce (mencegah double trigger)
+String perintahTerakhir = "";
+unsigned long waktuTerakhir = 0;
 
-// Logika Relay Active LOW
-#define RELAY_ON  LOW
-#define RELAY_OFF HIGH
-
-// Global Control Variables
-String selectedWashMode = "STANDARD";
-int userSelectedDuration = 450;
-unsigned long motorOnTime = 5000;
-unsigned long motorOffTime = 3000;
-bool motorStatus = false;
-unsigned long lastMotorToggleTime = 0;
-unsigned long currentElapsedSeconds = 0;
-unsigned long currentRemainSeconds = 0;
-unsigned long safetyTimeoutStart = 0;
-
-// State Machine Enums & Variables
-enum MachineState {
-  STATE_IDLE,
-  STATE_FILLING,
-  STATE_WASHING,
-  STATE_DRAINING,
-  STATE_WAITING_SPIN,
-  STATE_SPINNING,
-  STATE_DRAIN_FINISH,
-  STATE_DONE
-};
-
-MachineState currentMasterState = STATE_IDLE;
-String activeProcessType = "NONE";
-
-unsigned long processStartTime = 0;
-unsigned long processDurationMillis = 450000;
-
-void stopAllRelays() {
-  digitalWrite(RELAY_INLET_WATER, RELAY_OFF);
-  digitalWrite(RELAY_DRAIN_VALVE, RELAY_OFF);
-  digitalWrite(RELAY_WASH_CW, RELAY_OFF);
-  digitalWrite(RELAY_WASH_CCW, RELAY_OFF);
-  activeProcessType = "NONE";
-  currentMasterState = STATE_IDLE;
-}
-
-void sendRealtimeStatusToWeb(int sisaDetik, int berjalanDetik, String statusProses) {
-  if (mqttClient.connected()) {
-    String payload = "REMAIN:" + String(sisaDetik) + ",ELAPSED:" + String(berjalanDetik) + ",STATUS:" + statusProses;
-    mqttClient.publish("washing_machine/status", payload.c_str());
-  }
-}
-
-void configureModeTiming(String mode) {
-  selectedWashMode = mode;
-  if (mode == "SOFT") { motorOnTime = 3000; motorOffTime = 5000; }
-  else if (mode == "STRONG") { motorOnTime = 7000; motorOffTime = 2000; }
-  else if (mode == "SPEED") { motorOnTime = 4000; motorOffTime = 2000; }
-  else { motorOnTime = 5000; motorOffTime = 3000; }
-}
-
-void startCycle(String type, int durationSeconds, String mode) {
-  stopAllRelays();
-  configureModeTiming(mode);
-  processDurationMillis = (unsigned long)durationSeconds * 1000;
-  activeProcessType = type;
-  processStartTime = millis();
-  safetyTimeoutStart = millis();
-
-  if (type == "AUTO" || type == "WASH") {
-    currentMasterState = STATE_FILLING;
-  } else if (type == "SPIN") {
-    currentMasterState = STATE_DRAINING;
-  }
-}
-
-void handleMachineProcess() {
-  unsigned long currentMillis = millis();
-
-  switch (currentMasterState) {
-    case STATE_IDLE: break;
-
-    // 1. TAHAP ISI AIR
-    case STATE_FILLING:
-      digitalWrite(RELAY_INLET_WATER, RELAY_ON);
-      if (currentMillis - safetyTimeoutStart > 60000) {
-        stopAllRelays();
-        sendRealtimeStatusToWeb(0, 0, "STANDBY");
-        break;
-      }
-      if (digitalRead(SENSOR_WATER_LEVEL) == HIGH) {
-        digitalWrite(RELAY_INLET_WATER, RELAY_OFF);
-        currentMasterState = STATE_WASHING;
-        processStartTime = currentMillis;
-        lastMotorToggleTime = currentMillis;
-      }
-      break;
-
-    // 2. TAHAP CUCI (CW / CCW dengan Jeda Kekuatan)
-    case STATE_WASHING: {
-      unsigned long elapsed = currentMillis - processStartTime;
-      unsigned long washDuration = (activeProcessType == "AUTO") ? 600000 : processDurationMillis;
-      
-      currentElapsedSeconds = elapsed / 1000;
-      currentRemainSeconds = (washDuration > elapsed) ? (washDuration - elapsed) / 1000 : 0;
-      
-      if (currentMillis - lastMotorToggleTime >= (motorStatus ? motorOnTime : motorOffTime)) {
-        lastMotorToggleTime = currentMillis;
-        motorStatus = !motorStatus;
-        static bool dir = true;
-        
-        digitalWrite(RELAY_WASH_CW, motorStatus && dir ? RELAY_ON : RELAY_OFF);
-        digitalWrite(RELAY_WASH_CCW, motorStatus && !dir ? RELAY_ON : RELAY_OFF);
-        
-        if (!motorStatus) dir = !dir;
-      }
-      
-      sendRealtimeStatusToWeb(currentRemainSeconds, currentElapsedSeconds, "WASH");
-      
-      if (elapsed >= washDuration) {
-        digitalWrite(RELAY_WASH_CW, RELAY_OFF);
-        digitalWrite(RELAY_WASH_CCW, RELAY_OFF);
-        if (activeProcessType == "AUTO") {
-          currentMasterState = STATE_DRAINING;
-          processStartTime = currentMillis;
-          safetyTimeoutStart = currentMillis;
-        } else {
-          stopAllRelays();
-          currentMasterState = STATE_DONE;
-          sendRealtimeStatusToWeb(0, currentElapsedSeconds, "STANDBY");
-        }
-      }
-      break;
-    }
-
-    // 3. TAHAP KURAS AIR
-    case STATE_DRAINING:
-      digitalWrite(RELAY_DRAIN_VALVE, RELAY_ON);
-      if (digitalRead(SENSOR_WATER_LEVEL) == LOW || (currentMillis - safetyTimeoutStart >= 40000)) {
-        currentMasterState = STATE_WAITING_SPIN;
-        processStartTime = currentMillis;
-      }
-      break;
-
-    // 4. JEDA TUNGGU 35 DETIK
-    case STATE_WAITING_SPIN:
-      if (currentMillis - processStartTime >= 35000) {
-        currentMasterState = STATE_SPINNING;
-        processStartTime = currentMillis;
-      }
-      break;
-
-    // 5. TAHAP SPIN (Menggunakan RELAY_WASH_CW)
-    case STATE_SPINNING: {
-      digitalWrite(RELAY_WASH_CW, RELAY_ON);
-      
-      unsigned long elapsed = currentMillis - processStartTime;
-      unsigned long spinDuration = (activeProcessType == "AUTO") ? 300000 : ((processDurationMillis == 450000) ? 120000 : processDurationMillis);
-      
-      currentElapsedSeconds = elapsed / 1000;
-      currentRemainSeconds = (spinDuration > elapsed) ? (spinDuration - elapsed) / 1000 : 0;
-      sendRealtimeStatusToWeb(currentRemainSeconds, currentElapsedSeconds, "SPIN");
-      
-      if (elapsed >= spinDuration) {
-        digitalWrite(RELAY_WASH_CW, RELAY_OFF);
-        currentMasterState = STATE_DRAIN_FINISH;
-        processStartTime = currentMillis;
-      }
-      break;
-    }
-
-    // 6. TAHAP DRAIN FINISH
-    case STATE_DRAIN_FINISH: {
-      unsigned long drainFinishDelay = (activeProcessType == "AUTO") ? 35000 : 30000;
-      if (currentMillis - processStartTime >= drainFinishDelay) {
-        digitalWrite(RELAY_DRAIN_VALVE, RELAY_OFF);
-        stopAllRelays();
-        currentMasterState = STATE_DONE;
-        sendRealtimeStatusToWeb(0, currentElapsedSeconds, "STANDBY");
-      }
-      break;
-    }
-
-    case STATE_DONE:
-      currentMasterState = STATE_IDLE;
-      break;
-  }
-}
-
-void processCommand(String cmd) {
-  if (cmd.startsWith("MODE:")) {
-    String mode = cmd.substring(5);
-    if (mode == "STOP") {
-      stopAllRelays();
-      sendRealtimeStatusToWeb(0, 0, "STANDBY");
-    } else if (mode == "AUTO") {
-      startCycle("AUTO", userSelectedDuration, mode);
-    } else {
-      configureModeTiming(mode);
-    }
-  } else if (cmd.startsWith("DURATION:")) {
-    userSelectedDuration = cmd.substring(9).toInt();
-  } else if (cmd.startsWith("ACTION:")) {
-    String action = cmd.substring(7);
-    if (action == "WASH") startCycle("WASH", userSelectedDuration, selectedWashMode);
-    else if (action == "SPIN") startCycle("SPIN", userSelectedDuration, selectedWashMode);
-  }
-}
-
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, byte* payload, unsigned int length) {
   String message = "";
-  for (unsigned int i = 0; i < length; i++) message += (char)payload[i];
-  processCommand(message);
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  message.trim();
+
+  // Filter: abaikan jika perintah sama dikirim < 500 ms
+  if (message == perintahTerakhir && (millis() - waktuTerakhir < 500)) {
+    return;
+  }
+
+  perintahTerakhir = message;
+  waktuTerakhir = millis();
+
+  // Teruskan perintah ke ESP32 Utama via Serial2
+  Serial2.println(message);
+  Serial.println("[WEB -> ESP32 UTAMA]: " + message);
 }
 
 void reconnectMQTT() {
-  while (!mqttClient.connected()) {
-    String clientId = "ESP32Wash-" + String(random(0xffff), HEX);
-    if (mqttClient.connect(clientId.c_str())) {
-      mqttClient.subscribe("washing_machine/control");
+  while (!client.connected()) {
+    Serial.print("Menghubungkan ke Broker MQTT...");
+    String clientId = "ESP32Bridge_";
+    clientId += String(random(0xffff), HEX);
+    
+    if (client.connect(clientId.c_str())) {
+      Serial.println(" Terhubung!");
+      client.subscribe(topic_command);
     } else {
+      Serial.print(" Gagal (rc=");
+      Serial.print(client.state());
+      Serial.println(") Coba lagi 2 detik...");
       delay(2000);
     }
   }
@@ -240,31 +56,34 @@ void reconnectMQTT() {
 
 void setup() {
   Serial.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, 16, 17); // RX2=16, TX2=17 ke ESP32 Utama
 
-  digitalWrite(RELAY_INLET_WATER, RELAY_OFF);
-  digitalWrite(RELAY_DRAIN_VALVE, RELAY_OFF);
-  digitalWrite(RELAY_WASH_CW, RELAY_OFF);
-  digitalWrite(RELAY_WASH_CCW, RELAY_OFF);
-
-  pinMode(RELAY_INLET_WATER, OUTPUT);
-  pinMode(RELAY_DRAIN_VALVE, OUTPUT);
-  pinMode(RELAY_WASH_CW, OUTPUT);
-  pinMode(RELAY_WASH_CCW, OUTPUT);
-  pinMode(SENSOR_WATER_LEVEL, INPUT);
-
-  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) delay(500);
+  Serial.print("Menghubungkan Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWi-Fi Terhubung!");
 
-  mqttClient.setServer(mqtt_server, 1883);
-  mqttClient.setCallback(mqttCallback);
-  mqttClient.setKeepAlive(15);
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
 }
 
 void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!mqttClient.connected()) reconnectMQTT();
-    mqttClient.loop();
+  if (!client.connected()) {
+    reconnectMQTT();
   }
-  handleMachineProcess();
+  client.loop();
+
+  // Terima data telemetry dari ESP32 Utama lalu kirim ke MQTT Web
+  if (Serial2.available()) {
+    String dataUtama = Serial2.readStringUntil('\n');
+    dataUtama.trim();
+
+    if (dataUtama.length() > 0) {
+      client.publish(topic_status, dataUtama.c_str());
+      Serial.println("[ESP32 UTAMA -> WEB]: " + dataUtama);
+    }
+  }
 }
