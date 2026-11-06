@@ -1,7 +1,7 @@
 // ==================== KONFIGURASI MQTT & BLE ====================
 let mqttClient;
 const mqttBroker = "broker.hivemq.com";
-const mqttPort   = 8884; // Port WSS HiveMQ
+const mqttPort   = 8884; // Port WSS HiveMQ (SSL)
 const clientId   = "WebClient_Washer_" + Math.floor(Math.random() * 100000);
 const topicCommand = "mesincuci/command";
 const topicStatus  = "mesincuci/status";
@@ -20,10 +20,12 @@ const circumference = 440;
 let prosesSebelumnya = "";
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Hanya mengecek status izin saat dimuat (TIDAK langsung meminta izin otomatis)
     cekStatusIzinNotifikasi();
 });
 
 // ==================== NOTIFIKASI & GETAR HP ====================
+// Dipanggil HANYA saat tombol "🔔 Aktifkan Notifikasi" diklik oleh user
 function mintaIzinNotifikasi() {
     if ("Notification" in window) {
         Notification.requestPermission().then((permission) => {
@@ -35,12 +37,12 @@ function mintaIzinNotifikasi() {
                     body: "Notifikasi & Getar siap digunakan!",
                     icon: "https://cdn-icons-png.flaticon.com/512/2965/2965358.png"
                 });
-            } else {
-                alert("Izin notifikasi ditolak oleh browser!");
+            } else if (permission === "denied") {
+                alert("Izin notifikasi ditolak! Silakan aktifkan izin notifikasi dari pengaturan browser / ikon gembok di URL.");
             }
         });
     } else {
-        alert("Browser Anda tidak mendukung Notifikasi.");
+        alert("Browser Anda tidak mendukung Web Notification API.");
     }
 }
 
@@ -121,7 +123,7 @@ function kirimNotifikasiSelesai() {
 function gantiModeKoneksi(mode) {
     modeAktif = mode;
     const btn = document.getElementById("btnConnect");
-    btn.innerText = `Hubungkan ke ${mode}`;
+    if (btn) btn.innerText = `Hubungkan ke ${mode}`;
     log(`[Mode System] Berpindah ke mode ${mode}`);
 }
 
@@ -166,12 +168,12 @@ function onConnectionLost(responseObject) {
 
 async function connectBLE() {
     if (!navigator.bluetooth) {
-        alert("Browser tidak mendukung Bluetooth API! Gunakan Chrome / Edge.");
+        alert("Browser tidak mendukung Web Bluetooth API! Gunakan Google Chrome / Microsoft Edge.");
         return;
     }
 
     try {
-        log("Mencari perangkat BLE...");
+        log("Mencari perangkat BLE ESP32...");
         bleDevice = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
             optionalServices: [SERVICE_UUID]
@@ -205,33 +207,36 @@ function handleBLENotify(event) {
 
 // ==================== SLIDER & MANUAL MODE ====================
 function updateSliderLabel(val) {
-    document.getElementById("labelDurasiVal").innerText = val + " Menit";
+    const label = document.getElementById("labelDurasiVal");
+    if (label) label.innerText = val + " Menit";
 }
 
 function jalankanSpinCustom() {
-    let durasi = parseInt(document.getElementById("sliderDurasi").value) || 5;
+    const slider = document.getElementById("sliderDurasi");
+    let durasi = slider ? parseInt(slider.value) : 5;
     durasi = Math.min(Math.max(durasi, 1), 7);
     log(`[Manual] Spin Only (${durasi}m)`);
     kirimPerintah(`CMD:4:${durasi}`);
 }
 
 function jalankanCuciSajaCustom() {
-    let durasi = parseInt(document.getElementById("sliderDurasi").value) || 10;
+    const slider = document.getElementById("sliderDurasi");
+    let durasi = slider ? parseInt(slider.value) : 10;
     durasi = Math.min(Math.max(durasi, 1), 15);
     log(`[Manual] Cuci Saja (${durasi}m)`);
     kirimPerintah(`CMD:5:${durasi}`);
 }
 
-// ==================== KONTROL UTAMA ====================
+// ==================== KONTROL UTAMA & PAYLOAD PARSER ====================
 function kirimPerintah(cmd) {
     if (cmd.startsWith("CMD:") && cmd !== "CMD:STOP") {
         startLapTimer();
         setProgressRing(0);
     } else if (cmd === "CMD:STOP") {
         stopLapTimer();
-        document.getElementById("namaProsesAktif").innerText = "DIHENTIKAN";
-        document.getElementById("prosesStepTimer").innerText = "0s";
-        document.getElementById("percentLabel").innerText = "0%";
+        updateElemenTeks("namaProsesAktif", "DIHENTIKAN");
+        updateElemenTeks("prosesStepTimer", "0s");
+        updateElemenTeks("percentLabel", "0%");
         setProgressRing(0);
         updateHardwareUI("KOSONG", "OFF", "OFF", "OFF");
     }
@@ -261,14 +266,20 @@ function onMessageArrived(message) {
 }
 
 function prosesPayloadData(payload) {
+    // Menghilangkan awalan STATUS: jika ada dari broadcast ESP32
+    if (payload.startsWith("STATUS:")) {
+        payload = payload.replace("STATUS:", "").trim();
+    }
+
     if (payload.startsWith("TIMER|")) {
+        // Format: TIMER|NamaProses|SisaDetiks
         const parts = payload.split("|");
-        const namaProses = parts[1].trim();
-        const sisaWaktu = parts[2];
+        const namaProses = parts[1] ? parts[1].trim() : "PROSES";
+        const sisaWaktu = parts[2] ? parts[2].trim() : "0s";
         const sisaAngka = parseInt(sisaWaktu);
 
-        document.getElementById("namaProsesAktif").innerText = namaProses.toUpperCase();
-        document.getElementById("prosesStepTimer").innerText = sisaWaktu;
+        updateElemenTeks("namaProsesAktif", namaProses.toUpperCase());
+        updateElemenTeks("prosesStepTimer", sisaWaktu);
 
         if (prosesSebelumnya !== "" && prosesSebelumnya !== namaProses) {
             pemicuGetarDanBeep(150);
@@ -276,12 +287,14 @@ function prosesPayloadData(payload) {
         }
         prosesSebelumnya = namaProses;
 
-        if (!isNaN(sisaAngka) && sisaAngka > 0) {
-            const percent = Math.min(100, Math.max(5, (100 - (sisaAngka % 100))));
+        if (!isNaN(sisaAngka) && sisaAngka >= 0) {
+            // Kalkulasi persentase visual ring
+            const percent = Math.min(100, Math.max(0, (100 - (sisaAngka % 100))));
             setProgressRing(percent);
-            document.getElementById("percentLabel").innerText = percent + "%";
+            updateElemenTeks("percentLabel", percent + "%");
         }
     } else if (payload.startsWith("DATA|")) {
+        // Format: DATA|WATER:PENUH|PWR:ON|INLET:ON|BOOSTER:ON|DRAIN:OFF|KIRI:OFF|KANAN:ON
         const waterMatch = payload.match(/WATER:(PENUH|KOSONG)/);
         const inletMatch = payload.match(/INLET:(ON|OFF)/);
         const drainMatch = payload.match(/DRAIN:(ON|OFF)/);
@@ -300,21 +313,28 @@ function prosesPayloadData(payload) {
         }
 
         updateHardwareUI(water, inlet, drain, motor);
-    } else if (payload === "SELESAI" || payload === "DIHENTIKAN") {
+    } else if (payload.includes("SELESAI") || payload.includes("DIHENTIKAN")) {
         stopLapTimer();
-        document.getElementById("namaProsesAktif").innerText = payload;
-        document.getElementById("prosesStepTimer").innerText = "0s";
-        document.getElementById("percentLabel").innerText = payload === "SELESAI" ? "100%" : "0%";
-        setProgressRing(payload === "SELESAI" ? 100 : 0);
+        const statusAkhir = payload.includes("SELESAI") ? "SELESAI" : "DIHENTIKAN";
+        updateElemenTeks("namaProsesAktif", statusAkhir);
+        updateElemenTeks("prosesStepTimer", "0s");
+        updateElemenTeks("percentLabel", statusAkhir === "SELESAI" ? "100%" : "0%");
+        setProgressRing(statusAkhir === "SELESAI" ? 100 : 0);
         updateHardwareUI("KOSONG", "OFF", "OFF", "OFF");
         log("ESP32: " + payload);
 
-        if (payload === "SELESAI") {
+        if (statusAkhir === "SELESAI") {
             kirimNotifikasiSelesai();
         }
     } else {
         log("ESP32: " + payload);
     }
+}
+
+// ==================== UTILITAS UPDATE UI ====================
+function updateElemenTeks(id, teks) {
+    const elem = document.getElementById(id);
+    if (elem) elem.innerText = teks;
 }
 
 function updateStatusUI(teks, bg, warnaTeks) {
@@ -327,7 +347,7 @@ function updateStatusUI(teks, bg, warnaTeks) {
 
 function setProgressRing(percent) {
     const circle = document.getElementById("circleProgress");
-    if(!circle) return;
+    if (!circle) return;
     circle.style.strokeDashoffset = circumference - (percent / 100 * circumference);
 }
 
@@ -339,7 +359,7 @@ function startLapTimer() {
         lapDetikTotal++;
         const menit = String(Math.floor(lapDetikTotal / 60)).padStart(2, '0');
         const detik = String(lapDetikTotal % 60).padStart(2, '0');
-        document.getElementById("totalLapTimer").innerText = `Total: ${menit}:${detik}`;
+        updateElemenTeks("totalLapTimer", `Total: ${menit}:${detik}`);
     }, 1000);
 }
 
@@ -350,20 +370,25 @@ function stopLapTimer() {
 }
 
 function updateHardwareUI(water, inlet, drain, motor) {
-    document.getElementById("statusWaterVal").innerText = water;
-    document.getElementById("statusInletVal").innerText = inlet;
-    document.getElementById("statusDrainVal").innerText = drain;
-    document.getElementById("statusMotorVal").innerText = motor;
+    updateElemenTeks("statusWaterVal", water);
+    updateElemenTeks("statusInletVal", inlet);
+    updateElemenTeks("statusDrainVal", drain);
+    updateElemenTeks("statusMotorVal", motor);
 
-    document.getElementById("hwWater").className = `hw-item ${water === "PENUH" ? "active" : ""}`;
-    document.getElementById("hwInlet").className = `hw-item ${inlet === "ON" ? "active" : ""}`;
-    document.getElementById("hwDrain").className = `hw-item ${drain === "ON" ? "active" : ""}`;
-    document.getElementById("hwMotor").className = `hw-item ${motor !== "OFF" ? "active" : ""}`;
+    const hwWater = document.getElementById("hwWater");
+    const hwInlet = document.getElementById("hwInlet");
+    const hwDrain = document.getElementById("hwDrain");
+    const hwMotor = document.getElementById("hwMotor");
+
+    if (hwWater) hwWater.className = `hw-item ${water === "PENUH" ? "active" : ""}`;
+    if (hwInlet) hwInlet.className = `hw-item ${inlet === "ON" ? "active" : ""}`;
+    if (hwDrain) hwDrain.className = `hw-item ${drain === "ON" ? "active" : ""}`;
+    if (hwMotor) hwMotor.className = `hw-item ${motor !== "OFF" ? "active" : ""}`;
 }
 
 function log(msg) {
     const box = document.getElementById("logTerminal");
-    if(!box) return;
+    if (!box) return;
     box.innerHTML += msg + "<br>";
     box.scrollTop = box.scrollHeight;
 }
