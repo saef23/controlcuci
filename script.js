@@ -286,14 +286,18 @@ function prosesPayloadData(payload) {
         const inletMatch = payload.match(/INLET:(ON|OFF)/);
         const drainMatch = payload.match(/DRAIN:(ON|OFF)/);
         const kiriMatch  = payload.match(/KIRI:(ON|OFF)/);
-        const kananMatch = payload.match(/KANAN:(ON|OFF)/); // Perbaikan kurung tutup
+        const kananMatch = payload.match(/KANAN:(ON|OFF)/);
 
         const water = waterMatch ? waterMatch[1] : "-";
         const inlet = inletMatch ? inletMatch[1] : "OFF";
         const drain = drainMatch ? drainMatch[1] : "OFF";
+        
         let motor = "OFF";
-        if (kiriMatch && kiriMatch[1] === "ON") motor = "KIRI";
-        else if (kananMatch && kananMatch[1] === "ON") motor = "KANAL" || "KANAN";
+        if (kiriMatch && kiriMatch[1] === "ON") {
+            motor = "KIRI";
+        } else if (kananMatch && kananMatch[1] === "ON") {
+            motor = "KANAN";
+        }
 
         updateHardwareUI(water, inlet, drain, motor);
     } else if (payload === "SELESAI" || payload === "DIHENTIKAN") {
