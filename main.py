@@ -218,8 +218,9 @@ def isi_air_otomatis():
         
         start_pengisian = time.ticks_ms()
         timeout_air_ms = 1200000 # 20 Menit Timeout
+        detik_stabil = 0 # Debounce counter
 
-        while water_level_sensor.value() == 1:
+        while True:
             if cek_perintah_masuk():
                 return False
 
@@ -229,8 +230,16 @@ def isi_air_otomatis():
                 sedang_berjalan = False
                 return False
 
+            # Sensor harus membaca 0 (PENUH) berturut-turut minimal 3 detik
+            if water_level_sensor.value() == 0:
+                detik_stabil += 1
+                if detik_stabil >= 3:
+                    break
+            else:
+                detik_stabil = 0
+
             kirim_telemetry()
-            time.sleep_ms(500)
+            time.sleep_ms(1000)
 
         water_inlet.value(1)
         booster_pump.value(1)
@@ -243,8 +252,9 @@ def buang_air_otomatis():
     
     start_drain = time.ticks_ms()
     timeout_drain_ms = 600000 # 10 Menit Timeout
+    detik_stabil = 0 # Debounce counter untuk sinyal KOSONG
 
-    while water_level_sensor.value() == 0:
+    while True:
         if cek_perintah_masuk():
             return False
 
@@ -255,8 +265,16 @@ def buang_air_otomatis():
             sedang_berjalan = False
             return False
 
+        # Sensor harus membaca 1 (KOSONG) berturut-turut minimal 3 detik
+        if water_level_sensor.value() == 1:
+            detik_stabil += 1
+            if detik_stabil >= 3:
+                break
+        else:
+            detik_stabil = 0
+
         kirim_telemetry()
-        time.sleep_ms(500)
+        time.sleep_ms(1000)
 
     if not jalankan_timer_proses(5000, "Ekstra Pengurasan"): return False
 
@@ -360,10 +378,20 @@ def proses_spin_utama(durasi_menit):
     kirim_status("SPIN: Motor Drain ON...")
     motor_drain.value(0)
 
-    while water_level_sensor.value() == 0:
+    detik_stabil = 0
+    while True:
         if cek_perintah_masuk(): return False
+        
+        # Debounce: Sensor harus bernilai 1 (KOSONG) berturut-turut minimal 3 detik
+        if water_level_sensor.value() == 1:
+            detik_stabil += 1
+            if detik_stabil >= 3:
+                break
+        else:
+            detik_stabil = 0
+            
         kirim_telemetry()
-        time.sleep_ms(200)
+        time.sleep_ms(1000)
 
     kirim_status("SPIN: Air Kosong. Jeda 40 Detik...")
     if not jalankan_timer_proses(JEDA_40_DETIK, "Jeda Sebelum Spin"): return False
