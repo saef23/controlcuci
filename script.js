@@ -19,13 +19,18 @@ let lapDetikTotal = 0;
 const circumference = 440;
 let prosesSebelumnya = "";
 
+// Variabel untuk progress total real-time
+let totalDurasiDetik = 0;
+let sisaDetikBerjalan = 0;
+
+// Status 4 Lampu Tambahan
+const statusLampu = { 1: false, 2: false, 3: false, 4: false };
+
 document.addEventListener("DOMContentLoaded", () => {
-    // Hanya mengecek status izin saat dimuat (TIDAK langsung meminta izin otomatis)
     cekStatusIzinNotifikasi();
 });
 
 // ==================== NOTIFIKASI & GETAR HP ====================
-// Dipanggil HANYA saat tombol "🔔 Aktifkan Notifikasi" diklik oleh user
 function mintaIzinNotifikasi() {
     if ("Notification" in window) {
         Notification.requestPermission().then((permission) => {
@@ -38,11 +43,9 @@ function mintaIzinNotifikasi() {
                     icon: "https://cdn-icons-png.flaticon.com/512/2965/2965358.png"
                 });
             } else if (permission === "denied") {
-                alert("Izin notifikasi ditolak! Silakan aktifkan izin notifikasi dari pengaturan browser / ikon gembok di URL.");
+                alert("Izin notifikasi ditolak! Aktifkan manual dari pengaturan browser.");
             }
         });
-    } else {
-        alert("Browser Anda tidak mendukung Web Notification API.");
     }
 }
 
@@ -87,7 +90,6 @@ function pemicuGetarDanBeep(durasiMs) {
 
 function kirimNotifikasiSelesai() {
     if ("vibrate" in navigator) navigator.vibrate([400, 150, 400, 150, 800]);
-
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (AudioContext) {
@@ -154,7 +156,6 @@ function connectMQTT() {
             updateStatusUI("MQTT: OFF", "#e53935", "#fff");
         }
     };
-
     mqttClient.connect(options);
 }
 
@@ -168,10 +169,9 @@ function onConnectionLost(responseObject) {
 
 async function connectBLE() {
     if (!navigator.bluetooth) {
-        alert("Browser tidak mendukung Web Bluetooth API! Gunakan Google Chrome / Microsoft Edge.");
+        alert("Browser tidak mendukung Web Bluetooth API! Gunakan Google Chrome.");
         return;
     }
-
     try {
         log("Mencari perangkat BLE ESP32...");
         bleDevice = await navigator.bluetooth.requestDevice({
@@ -205,7 +205,7 @@ function handleBLENotify(event) {
     prosesPayloadData(decoder.decode(event.target.value).trim());
 }
 
-// ==================== SLIDER & MANUAL MODE ====================
+// ==================== MANUAL SLIDER ====================
 function updateSliderLabel(val) {
     const label = document.getElementById("labelDurasiVal");
     if (label) label.innerText = val + " Menit";
@@ -227,13 +227,43 @@ function jalankanCuciSajaCustom() {
     kirimPerintah(`CMD:5:${durasi}`);
 }
 
-// ==================== KONTROL UTAMA & PAYLOAD PARSER ====================
+// ==================== KONTROL SAKLAR LAMPU TAMBAHAN (OPTIMISTIC UI) ====================
+function toggleLampu(noLampu) {
+    // 1. Toggle status secara langsung
+    statusLampu[noLampu] = !statusLampu[noLampu];
+    
+    // 2. Tampilkan animasi & status di UI Web langsung saat diklik
+    updateUIStatusLampu(noLampu, statusLampu[noLampu]);
+    
+    // 3. Kirim perintah teks ke ESP32
+    const cmd = `LAMPU${noLampu}_${statusLampu[noLampu] ? "ON" : "OFF"}`;
+    kirimPerintah(cmd);
+}
+
+function updateUIStatusLampu(noLampu, isNyala) {
+    statusLampu[noLampu] = isNyala;
+    const btn = document.getElementById(`btnLampu${noLampu}`);
+    const card = document.getElementById(`cardLampu${noLampu}`);
+    
+    if (btn) btn.innerText = isNyala ? "ON" : "OFF";
+    if (card) {
+        if (isNyala) {
+            card.classList.add("active");
+        } else {
+            card.classList.remove("active");
+        }
+    }
+}
+
+// ==================== KIRIM PERINTAH & PARSER PAYLOAD ====================
 function kirimPerintah(cmd) {
     if (cmd.startsWith("CMD:") && cmd !== "CMD:STOP") {
         startLapTimer();
         setProgressRing(0);
+        totalDurasiDetik = 0; // Reset acuan progress total
     } else if (cmd === "CMD:STOP") {
         stopLapTimer();
+        totalDurasiDetik = 0;
         updateElemenTeks("namaProsesAktif", "DIHENTIKAN");
         updateElemenTeks("prosesStepTimer", "0s");
         updateElemenTeks("percentLabel", "0%");
@@ -266,20 +296,18 @@ function onMessageArrived(message) {
 }
 
 function prosesPayloadData(payload) {
-    // Menghilangkan awalan STATUS: jika ada dari broadcast ESP32
     if (payload.startsWith("STATUS:")) {
         payload = payload.replace("STATUS:", "").trim();
     }
 
     if (payload.startsWith("TIMER|")) {
-        // Format: TIMER|NamaProses|SisaDetiks
         const parts = payload.split("|");
         const namaProses = parts[1] ? parts[1].trim() : "PROSES";
-        const sisaWaktu = parts[2] ? parts[2].trim() : "0s";
-        const sisaAngka = parseInt(sisaWaktu);
+        const sisaWaktuStr = parts[2] ? parts[2].trim() : "0s";
+        const sisaAngka = parseInt(sisaWaktuStr);
 
         updateElemenTeks("namaProsesAktif", namaProses.toUpperCase());
-        updateElemenTeks("prosesStepTimer", sisaWaktu);
+        updateElemenTeks("prosesStepTimer", sisaWaktuStr);
 
         if (prosesSebelumnya !== "" && prosesSebelumnya !== namaProses) {
             pemicuGetarDanBeep(150);
@@ -287,51 +315,72 @@ function prosesPayloadData(payload) {
         }
         prosesSebelumnya = namaProses;
 
-        if (!isNaN(sisaAngka) && sisaAngka >= 0) {
-            // Kalkulasi persentase visual ring
-            const percent = Math.min(100, Math.max(0, (100 - (sisaAngka % 100))));
+        // --- PROGRESS TOTAL REAL-TIME ---
+        if (!isNaN(sisaAngka) && sisaAngka > 0) {
+            if (totalDurasiDetik === 0 || sisaAngka > totalDurasiDetik) {
+                totalDurasiDetik = sisaAngka; // Rekam durasi maksimal awal
+            }
+            sisaDetikBerjalan = sisaAngka;
+            
+            const elapsed = totalDurasiDetik - sisaDetikBerjalan;
+            const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalDurasiDetik) * 100)));
+            
             setProgressRing(percent);
             updateElemenTeks("percentLabel", percent + "%");
         }
     } else if (payload.startsWith("DATA|")) {
-        // Format: DATA|WATER:PENUH|PWR:ON|INLET:ON|BOOSTER:ON|DRAIN:OFF|KIRI:OFF|KANAN:ON
         const waterMatch = payload.match(/WATER:(PENUH|KOSONG)/);
         const inletMatch = payload.match(/INLET:(ON|OFF)/);
         const drainMatch = payload.match(/DRAIN:(ON|OFF)/);
         const kiriMatch  = payload.match(/KIRI:(ON|OFF)/);
         const kananMatch = payload.match(/KANAN:(ON|OFF)/);
+        const motorMatch = payload.match(/MOTOR:(KIRI|KANAN|ON|OFF)/);
+
+        // Match 4 Saklar Lampu Tambahan
+        const l1Match = payload.match(/L1:(ON|OFF)/);
+        const l2Match = payload.match(/L2:(ON|OFF)/);
+        const l3Match = payload.match(/L3:(ON|OFF)/);
+        const l4Match = payload.match(/L4:(ON|OFF)/);
 
         const water = waterMatch ? waterMatch[1] : "-";
         const inlet = inletMatch ? inletMatch[1] : "OFF";
         const drain = drainMatch ? drainMatch[1] : "OFF";
         
         let motor = "OFF";
-        if (kiriMatch && kiriMatch[1] === "ON") {
-            motor = "KIRI";
-        } else if (kananMatch && kananMatch[1] === "ON") {
-            motor = "KANAN";
-        }
+        if (kiriMatch && kiriMatch[1] === "ON") motor = "KIRI";
+        else if (kananMatch && kananMatch[1] === "ON") motor = "KANAN";
+        else if (motorMatch) motor = motorMatch[1];
 
         updateHardwareUI(water, inlet, drain, motor);
+
+        // Sinkronkan status lampu dari feedback ESP32
+        if (l1Match) updateUIStatusLampu(1, l1Match[1] === "ON");
+        if (l2Match) updateUIStatusLampu(2, l2Match[1] === "ON");
+        if (l3Match) updateUIStatusLampu(3, l3Match[1] === "ON");
+        if (l4Match) updateUIStatusLampu(4, l4Match[1] === "ON");
+
     } else if (payload.includes("SELESAI") || payload.includes("DIHENTIKAN")) {
         stopLapTimer();
+        totalDurasiDetik = 0;
         const statusAkhir = payload.includes("SELESAI") ? "SELESAI" : "DIHENTIKAN";
+        
         updateElemenTeks("namaProsesAktif", statusAkhir);
         updateElemenTeks("prosesStepTimer", "0s");
         updateElemenTeks("percentLabel", statusAkhir === "SELESAI" ? "100%" : "0%");
         setProgressRing(statusAkhir === "SELESAI" ? 100 : 0);
-        updateHardwareUI("KOSONG", "OFF", "OFF", "OFF");
+        updateHardwareUI("PENUH", "OFF", "OFF", "OFF");
         log("ESP32: " + payload);
 
         if (statusAkhir === "SELESAI") {
             kirimNotifikasiSelesai();
         }
     } else {
+        updateElemenTeks("namaProsesAktif", payload.replace("ESP32:", "").trim().toUpperCase());
         log("ESP32: " + payload);
     }
 }
 
-// ==================== UTILITAS UPDATE UI ====================
+// ==================== UTILITAS UI ====================
 function updateElemenTeks(id, teks) {
     const elem = document.getElementById(id);
     if (elem) elem.innerText = teks;
