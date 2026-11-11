@@ -20,7 +20,30 @@
         <!-- Tombol Izin Notifikasi & Getar -->
         <button id="btnNotif" class="btn-notif" onclick="mintaIzinNotifikasi()">🔔 Aktifkan Notifikasi & Getar HP</button>
 
-        <!-- Countdown / Hitung Mundur -->
+        <!-- SAKLAR LAMPU TAMBAHAN (RELAY 1 - 4) - DI BAWAH NOTIFIKASI -->
+        <div class="light-section">
+            <h3>KONTROL LAMPU TAMBAHAN</h3>
+            <div class="light-switches-grid">
+                <div class="light-card" id="cardLampu1">
+                    <span class="light-title">Lampu 1</span>
+                    <button class="btn-toggle-light" id="btnLampu1" onclick="toggleLampu(1)">OFF</button>
+                </div>
+                <div class="light-card" id="cardLampu2">
+                    <span class="light-title">Lampu 2</span>
+                    <button class="btn-toggle-light" id="btnLampu2" onclick="toggleLampu(2)">OFF</button>
+                </div>
+                <div class="light-card" id="cardLampu3">
+                    <span class="light-title">Lampu 3</span>
+                    <button class="btn-toggle-light" id="btnLampu3" onclick="toggleLampu(3)">OFF</button>
+                </div>
+                <div class="light-card" id="cardLampu4">
+                    <span class="light-title">Lampu 4</span>
+                    <button class="btn-toggle-light" id="btnLampu4" onclick="toggleLampu(4)">OFF</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Countdown / Hitung Mundur & Status Real-Time -->
         <div class="countdown-card">
             <span id="namaProsesAktif" class="countdown-title">SIAP DIGUNAKAN</span>
             <div id="prosesStepTimer" class="countdown-timer">00:00</div>
