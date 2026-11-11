@@ -11,32 +11,47 @@ PIN_BOOSTER_PUMP     = 15  # Pin Pompa Dorong
 PIN_RELAY_MOTOR_KIRI = 22
 PIN_RELAY_MOTOR_KANAN = 21
 PIN_MOTOR_DRAIN      = 19
-PIN_BUZZER           = 5
+PIN_BUZZER           = 5   # Active HIGH (1 = Nyala, 0 = Mati)
 PIN_WATER_LEVEL      = 4   # PENUH = 0 (LOW), KOSONG = 1 (HIGH)
+
+# --- 4 PIN TAMBAHAN UNTUK RELAY LAMPU/BEBAN EKSTERNAL ---
+PIN_LAMPU_1          = 13
+PIN_LAMPU_2          = 12
+PIN_LAMPU_3          = 14
+PIN_LAMPU_4          = 27
 
 # ==================== KONFIGURASI WIFI & MQTT ====================
 WIFI_SSID      = "realme C75"
 WIFI_PASS      = "123456789"
-MQTT_SERVER    = "broker.hivemq.com"  # Menggunakan broker alternatif yang stabil
+MQTT_SERVER    = "broker.hivemq.com"
 MQTT_CLIENT_ID = "ESP32_Washer_Hybrid"
 TOPIC_SUB      = b"mesincuci/command"
 TOPIC_PUB      = b"mesincuci/status"
 
-# Konstanta Waktu (ms)
-JEDA_40_DETIK = 40000
-JEDA_90_DETIK = 90000   # 1.5 Menit (90 Detik)
-JEDA_7_MENIT  = 420000
+# Konstanta Waktu (ms) - Jeda setelah kosong (90 Detik / 1 Menit 30 Detik)
+JEDA_SETELAH_KOSONG = 90000 
+JEDA_90_DETIK       = 90000   
+JEDA_7_MENIT        = 420000
 
-# Inisialisasi Pin Output (Active LOW: 1 = OFF, 0 = ON)
+# ==================== INISIALISASI PIN (Active LOW untuk Relay) ====================
+# Nilai value=1 memastikan Relay MATI saat ESP32 baru menyala
 power_ac     = Pin(PIN_POWER_AC, Pin.OUT, value=1)
 water_inlet  = Pin(PIN_WATER_INLET, Pin.OUT, value=1)
 booster_pump = Pin(PIN_BOOSTER_PUMP, Pin.OUT, value=1)
 relay_kiri   = Pin(PIN_RELAY_MOTOR_KIRI, Pin.OUT, value=1)
 relay_kanan  = Pin(PIN_RELAY_MOTOR_KANAN, Pin.OUT, value=1)
 motor_drain  = Pin(PIN_MOTOR_DRAIN, Pin.OUT, value=1)
+
+# Buzzer Active HIGH (0 = Mati)
 buzzer       = Pin(PIN_BUZZER, Pin.OUT, value=0)
 
 water_level_sensor = Pin(PIN_WATER_LEVEL, Pin.IN, Pin.PULL_UP)
+
+# Relay Lampu Active LOW (value=1 agar Mati saat booting)
+lampu1 = Pin(PIN_LAMPU_1, Pin.OUT, value=1)
+lampu2 = Pin(PIN_LAMPU_2, Pin.OUT, value=1)
+lampu3 = Pin(PIN_LAMPU_3, Pin.OUT, value=1)
+lampu4 = Pin(PIN_LAMPU_4, Pin.OUT, value=1)
 
 # Variable Global
 perintah_terakhir = ""
@@ -126,21 +141,21 @@ except Exception as e:
 
 # ==================== KONTROL HARDWARE ====================
 def matikan_semua_relay():
-    water_inlet.value(1)
-    booster_pump.value(1)
-    relay_kiri.value(1)
-    relay_kanan.value(1)
-    motor_drain.value(1)
-    buzzer.value(0)
+    water_inlet.value(1)   # 1 = MATI
+    booster_pump.value(1)  # 1 = MATI
+    relay_kiri.value(1)    # 1 = MATI
+    relay_kanan.value(1)   # 1 = MATI
+    motor_drain.value(1)   # 1 = MATI
+    buzzer.value(0)        # 0 = MATI (Buzzer Active HIGH)
 
 def power_on():
-    power_ac.value(0)
+    power_ac.value(0)      # 0 = NYALA (Active LOW)
     kirim_status("Power AC: ON")
     time.sleep(1)
 
 def power_off():
     matikan_semua_relay()
-    power_ac.value(1)
+    power_ac.value(1)      # 1 = MATI
     kirim_status("Power AC: OFF")
 
 def kirim_status(pesan):
@@ -159,7 +174,11 @@ def kirim_telemetry():
                    "|BOOSTER:" + ("ON" if booster_pump.value() == 0 else "OFF") + \
                    "|DRAIN:" + ("ON" if motor_drain.value() == 0 else "OFF") + \
                    "|KIRI:" + ("ON" if relay_kiri.value() == 0 else "OFF") + \
-                   "|KANAN:" + ("ON" if relay_kanan.value() == 0 else "OFF")
+                   "|KANAN:" + ("ON" if relay_kanan.value() == 0 else "OFF") + \
+                   "|L1:" + ("ON" if lampu1.value() == 0 else "OFF") + \
+                   "|L2:" + ("ON" if lampu2.value() == 0 else "OFF") + \
+                   "|L3:" + ("ON" if lampu3.value() == 0 else "OFF") + \
+                   "|L4:" + ("ON" if lampu4.value() == 0 else "OFF")
     telemetry_msg = "DATA|WATER:" + status_water + "|" + status_relay + "\n"
     
     ble.send(telemetry_msg)
@@ -192,6 +211,34 @@ def cek_perintah_masuk():
         return True
     return False
 
+# ==================== KONTROL 4 LAMPU TAMBAHAN (Active LOW) ====================
+def atur_lampu(cmd):
+    global lampu1, lampu2, lampu3, lampu4
+    if cmd == "LAMPU1_ON":
+        lampu1.value(0) # 0 = NYALA
+        kirim_status("Lampu 1: ON")
+    elif cmd == "LAMPU1_OFF":
+        lampu1.value(1) # 1 = MATI
+        kirim_status("Lampu 1: OFF")
+    elif cmd == "LAMPU2_ON":
+        lampu2.value(0)
+        kirim_status("Lampu 2: ON")
+    elif cmd == "LAMPU2_OFF":
+        lampu2.value(1)
+        kirim_status("Lampu 2: OFF")
+    elif cmd == "LAMPU3_ON":
+        lampu3.value(0)
+        kirim_status("Lampu 3: ON")
+    elif cmd == "LAMPU3_OFF":
+        lampu3.value(1)
+        kirim_status("Lampu 3: OFF")
+    elif cmd == "LAMPU4_ON":
+        lampu4.value(0)
+        kirim_status("Lampu 4: ON")
+    elif cmd == "LAMPU4_OFF":
+        lampu4.value(1)
+        kirim_status("Lampu 4: OFF")
+
 def jalankan_timer_proses(ms_total, nama_proses):
     start_ticks = time.ticks_ms()
     last_telemetry = start_ticks
@@ -213,12 +260,12 @@ def isi_air_otomatis():
     global sedang_berjalan
     if water_level_sensor.value() == 1:
         kirim_status("AIR & BOOSTER: Mengisi Air...")
-        water_inlet.value(0)
-        booster_pump.value(0)
+        water_inlet.value(0)   # 0 = NYALA
+        booster_pump.value(0) # 0 = NYALA
         
         start_pengisian = time.ticks_ms()
         timeout_air_ms = 1200000 # 20 Menit Timeout
-        detik_stabil = 0 # Debounce counter
+        detik_stabil = 0
 
         while True:
             if cek_perintah_masuk():
@@ -230,7 +277,6 @@ def isi_air_otomatis():
                 sedang_berjalan = False
                 return False
 
-            # Sensor harus membaca 0 (PENUH) berturut-turut minimal 3 detik
             if water_level_sensor.value() == 0:
                 detik_stabil += 1
                 if detik_stabil >= 3:
@@ -241,18 +287,18 @@ def isi_air_otomatis():
             kirim_telemetry()
             time.sleep_ms(1000)
 
-        water_inlet.value(1)
-        booster_pump.value(1)
+        water_inlet.value(1)   # 1 = MATI
+        booster_pump.value(1) # 1 = MATI
         kirim_status("AIR: Penuh (Pompa Dorong OFF)")
     return True
 
 def buang_air_otomatis():
     kirim_status("DRAIN: Membuang Air...")
-    motor_drain.value(0)
+    motor_drain.value(0) # 0 = NYALA
     
     start_drain = time.ticks_ms()
-    timeout_drain_ms = 600000 # 10 Menit Timeout
-    detik_stabil = 0 # Debounce counter untuk sinyal KOSONG
+    timeout_drain_ms = 600000
+    detik_stabil = 0
 
     while True:
         if cek_perintah_masuk():
@@ -265,7 +311,6 @@ def buang_air_otomatis():
             sedang_berjalan = False
             return False
 
-        # Sensor harus membaca 1 (KOSONG) berturut-turut minimal 3 detik
         if water_level_sensor.value() == 1:
             detik_stabil += 1
             if detik_stabil >= 3:
@@ -278,9 +323,9 @@ def buang_air_otomatis():
 
     if not jalankan_timer_proses(5000, "Ekstra Pengurasan"): return False
 
-    motor_drain.value(1)
-    kirim_status("DRAIN: Selesai. Jeda 1.5 Menit...")
-    return jalankan_timer_proses(JEDA_90_DETIK, "Jeda Drain")
+    motor_drain.value(1) # 1 = MATI
+    kirim_status("DRAIN: Selesai. Jeda 1 Menit 30 Detik...")
+    return jalankan_timer_proses(JEDA_SETELAH_KOSONG, "Jeda Drain")
 
 def proses_cuci(durasi_menit, waktu_putar_ms, waktu_jeda_ms):
     if not isi_air_otomatis(): return False
@@ -290,18 +335,18 @@ def proses_cuci(durasi_menit, waktu_putar_ms, waktu_jeda_ms):
     start = time.ticks_ms()
 
     while time.ticks_diff(time.ticks_ms(), start) < total_ms:
-        relay_kiri.value(0)
-        relay_kanan.value(1)
+        relay_kiri.value(0)  # 0 = NYALA
+        relay_kanan.value(1) # 1 = MATI
         if not jalankan_timer_proses(waktu_putar_ms, "Putar Kiri"): return False
 
-        relay_kiri.value(1)
+        relay_kiri.value(1)  # 1 = MATI
         if not jalankan_timer_proses(waktu_jeda_ms, "Jeda"): return False
 
-        relay_kanan.value(0)
-        relay_kiri.value(1)
+        relay_kanan.value(0) # 0 = NYALA
+        relay_kiri.value(1)  # 1 = MATI
         if not jalankan_timer_proses(waktu_putar_ms, "Putar Kanan"): return False
 
-        relay_kanan.value(1)
+        relay_kanan.value(1) # 1 = MATI
         if not jalankan_timer_proses(waktu_jeda_ms, "Jeda"): return False
 
     matikan_semua_relay()
@@ -338,13 +383,13 @@ def proses_bilas(jumlah_bilas, durasi_bilas_menit, waktu_putar_ms, waktu_jeda_ms
         if not proses_cuci(durasi_bilas_menit, waktu_putar_ms, waktu_jeda_ms): return False
 
         kirim_status("BILAS: Peras 1 Menit...")
-        motor_drain.value(0)
-        relay_kanan.value(0)
+        motor_drain.value(0)  # 0 = NYALA
+        relay_kanan.value(0) # 0 = NYALA
         if not jalankan_timer_proses(60000, "Peras Bilas"): return False
         
-        relay_kanan.value(1)
-        if not jalankan_timer_proses(JEDA_40_DETIK, "Jeda Drain Bilas"): return False
-        motor_drain.value(1)
+        relay_kanan.value(1) # 1 = MATI
+        if not jalankan_timer_proses(JEDA_SETELAH_KOSONG, "Jeda Drain Bilas"): return False
+        motor_drain.value(1)  # 1 = MATI
     return True
 
 def proses_perendaman_softener(durasi_putar_menit, durasi_jeda_ms):
@@ -376,13 +421,12 @@ def proses_perendaman_softener(durasi_putar_menit, durasi_jeda_ms):
 
 def proses_spin_utama(durasi_menit):
     kirim_status("SPIN: Motor Drain ON...")
-    motor_drain.value(0)
+    motor_drain.value(0) # 0 = NYALA
 
     detik_stabil = 0
     while True:
         if cek_perintah_masuk(): return False
         
-        # Debounce: Sensor harus bernilai 1 (KOSONG) berturut-turut minimal 3 detik
         if water_level_sensor.value() == 1:
             detik_stabil += 1
             if detik_stabil >= 3:
@@ -393,29 +437,29 @@ def proses_spin_utama(durasi_menit):
         kirim_telemetry()
         time.sleep_ms(1000)
 
-    kirim_status("SPIN: Air Kosong. Jeda 40 Detik...")
-    if not jalankan_timer_proses(JEDA_40_DETIK, "Jeda Sebelum Spin"): return False
+    kirim_status("SPIN: Air Kosong. Jeda 1 Menit 30 Detik...")
+    if not jalankan_timer_proses(JEDA_SETELAH_KOSONG, "Jeda Sebelum Spin"): return False
 
     kirim_status("SPIN: Motor Putar Kanan ON...")
-    relay_kanan.value(0)
+    relay_kanan.value(0) # 0 = NYALA
     
     if not jalankan_timer_proses(durasi_menit * 60000, "Spin Utama"): return False
     
-    relay_kanan.value(1)
+    relay_kanan.value(1) # 1 = MATI
     kirim_status("SPIN: Selesai. Jeda Drain 1.5 Menit...")
     
     if not jalankan_timer_proses(JEDA_90_DETIK, "Jeda Drain Akhir"): return False
     
-    motor_drain.value(1)
+    motor_drain.value(1) # 1 = MATI
     kirim_status("SPIN: Selesai")
     return True
 
 def bunyikan_buzzer_selesai():
     kirim_status("SELESAI: Membunyikan Buzzer")
     for _ in range(5):
-        buzzer.value(1)
+        buzzer.value(1) # 1 = NYALA (Buzzer Active HIGH)
         time.sleep_ms(300)
-        buzzer.value(0)
+        buzzer.value(0) # 0 = MATI
         time.sleep_ms(300)
 
 def jalankan_program(mode, durasi_custom=0):
@@ -464,7 +508,7 @@ def jalankan_program(mode, durasi_custom=0):
 
 # ==================== SETUP & LOOP UTAMA ====================
 matikan_semua_relay()
-print("ESP32 MicroPython Washer Ready (Hybrid MQTT & BLE)!")
+print("ESP32 MicroPython Washer Ready (FIX Booting All OFF)!")
 
 while True:
     if client:
@@ -477,9 +521,14 @@ while True:
     cmd_input = cmd_ble if cmd_ble != "" else perintah_terakhir
     perintah_terakhir = ""
 
-    if cmd_input != "" and not sedang_berjalan:
+    if cmd_input != "":
         print("Perintah Diterima:", cmd_input)
-        if cmd_input.startswith("CMD:"):
+        
+        if "LAMPU" in cmd_input:
+            atur_lampu(cmd_input)
+        elif cmd_input in ["1", "2", "3", "4", "5"] and not sedang_berjalan:
+            jalankan_program(int(cmd_input), 0)
+        elif cmd_input.startswith("CMD:") and not sedang_berjalan:
             parts = cmd_input.split(":")
             if len(parts) >= 2:
                 try:
@@ -488,7 +537,5 @@ while True:
                     jalankan_program(m_code, m_durasi)
                 except ValueError:
                     pass
-        elif cmd_input in ["1", "2", "3", "4", "5"]:
-            jalankan_program(int(cmd_input), 0)
 
     time.sleep_ms(100)
