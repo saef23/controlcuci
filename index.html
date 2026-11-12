@@ -20,9 +20,12 @@
         <!-- Tombol Izin Notifikasi & Getar -->
         <button id="btnNotif" class="btn-notif" onclick="mintaIzinNotifikasi()">🔔 Aktifkan Notifikasi & Getar HP</button>
 
-        <!-- SAKLAR LAMPU TAMBAHAN (RELAY 1 - 4) - DI BAWAH NOTIFIKASI -->
+        <!-- Tombol Asisten Perintah Suara (Auto-Listen) -->
+        <button id="btnVoice" class="btn-notif" onclick="toggleVoiceControl()" style="background: #1a2332; border-color: #28303d;">🎤 Aktifkan Asisten Suara (Auto-Listen)</button>
+
+        <!-- SAKLAR LAMPU & CHARGER HP (RELAY 1 - 4) -->
         <div class="light-section">
-            <h3>KONTROL LAMPU TAMBAHAN</h3>
+            <h3>KONTROL LAMPU & CHARGER HP</h3>
             <div class="light-switches-grid">
                 <div class="light-card" id="cardLampu1">
                     <span class="light-title">Lampu 1</span>
@@ -37,29 +40,30 @@
                     <button class="btn-toggle-light" id="btnLampu3" onclick="toggleLampu(3)">OFF</button>
                 </div>
                 <div class="light-card" id="cardLampu4">
-                    <span class="light-title">Lampu 4</span>
+                    <span class="light-title">Charger HP</span>
                     <button class="btn-toggle-light" id="btnLampu4" onclick="toggleLampu(4)">OFF</button>
                 </div>
             </div>
         </div>
 
-        <!-- Countdown / Hitung Mundur & Status Real-Time -->
+        <!-- Countdown / Hitung Mundur -->
         <div class="countdown-card">
             <span id="namaProsesAktif" class="countdown-title">SIAP DIGUNAKAN</span>
             <div id="prosesStepTimer" class="countdown-timer">00:00</div>
             <div id="totalLapTimer" class="lap-timer">Total: 00:00</div>
         </div>
 
-        <!-- Monitoring Ring Display -->
+        <!-- Monitoring Ring Display & Status ESP32 di Tengah -->
         <div class="ring-container">
-            <svg class="progress-ring" width="160" height="160">
-                <circle stroke="#212733" stroke-width="10" fill="transparent" r="70" cx="80" cy="80"/>
+            <svg class="progress-ring" width="180" height="180">
+                <circle stroke="#212733" stroke-width="10" fill="transparent" r="80" cx="90" cy="90"/>
                 <circle id="circleProgress" class="progress-ring-circle" stroke="#00e676" stroke-width="10" 
-                        stroke-dasharray="440" stroke-dashoffset="440" fill="transparent" r="70" cx="80" cy="80"/>
+                        stroke-dasharray="502" stroke-dashoffset="502" fill="transparent" r="80" cx="90" cy="90"/>
             </svg>
             <div class="ring-content">
-                <span id="percentLabel" style="font-size: 28px; font-weight: bold; color: #fff;">0%</span>
-                <span style="font-size: 11px; color: #78909c;">Progress</span>
+                <span id="percentLabel" style="font-size: 24px; font-weight: bold; color: #fff;">0%</span>
+                <!-- BALASAN/STATUS ESP32 DIPINDAHKAN KE SINI -->
+                <span id="espStatusDisplay" style="font-size: 10px; color: #00e676; font-weight: bold; margin-top: 4px; max-width: 120px; text-align: center; line-height: 1.2;">IDLE</span>
             </div>
         </div>
 
@@ -140,7 +144,7 @@
         <!-- Tombol Stop Darurat -->
         <button class="btn-stop" onclick="kirimPerintah('CMD:STOP')">STOP DARURAT</button>
 
-        <!-- Terminal Log System -->
+        <!-- Terminal Log System (Tetap ada untuk riwayat data) -->
         <div id="logTerminal" class="log-box">
             [System] Dashboard siap terhubung...<br>
         </div>
