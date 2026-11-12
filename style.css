@@ -20,7 +20,7 @@ h2 { font-size: 17px; margin: 0; color: #ffffff; letter-spacing: 0.5px; }
 }
 .btn-notif:hover { background: #263238; color: #ffffff; }
 
-/* KONTROL LAMPU TAMBAHAN (DI BAWAH NOTIFIKASI) */
+/* KONTROL LAMPU / CHARGER TAMBAHAN */
 .light-section { margin-bottom: 16px; }
 .light-switches-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .light-card { background: #12151c; border: 1px solid #28303d; border-radius: 10px; padding: 8px; text-align: center; transition: all 0.2s ease; }
@@ -39,10 +39,13 @@ h2 { font-size: 17px; margin: 0; color: #ffffff; letter-spacing: 0.5px; }
 .countdown-title { display: block; font-size: 11px; font-weight: bold; color: #00e676; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
 .countdown-timer { font-size: 32px; font-weight: 800; color: #ffffff; font-family: 'Courier New', Courier, monospace; text-shadow: 0 0 10px rgba(0, 230, 118, 0.3); }
 .lap-timer { font-size: 11px; color: #90a4ae; margin-top: 4px; }
-.ring-container { position: relative; width: 160px; height: 160px; margin: 0 auto 16px auto; display: flex; justify-content: center; align-items: center; }
+
+/* PROGRESS RING & CENTER TEXT */
+.ring-container { position: relative; width: 180px; height: 180px; margin: 0 auto 16px auto; display: flex; justify-content: center; align-items: center; }
 .progress-ring { transform: rotate(-90deg); }
 .progress-ring-circle { transition: stroke-dashoffset 0.5s ease-in-out; }
-.ring-content { position: absolute; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.ring-content { position: absolute; display: flex; flex-direction: column; align-items: center; text-align: center; width: 130px; }
+
 .hardware-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
 .hw-item { background: #212733; padding: 8px 4px; border-radius: 10px; text-align: center; border: 1px solid #2c3545; }
 .hw-title { display: block; font-size: 9px; color: #78909c; font-weight: bold; margin-bottom: 4px; }
