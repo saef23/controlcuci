@@ -16,14 +16,13 @@ const CHARACTERISTIC_UUID_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 let modeAktif = "MQTT";
 let lapInterval = null;
 let lapDetikTotal = 0;
-const circumference = 440;
+const circumference = 502; // Disesuaikan dengan r = 80 (2 * pi * 80)
 let prosesSebelumnya = "";
 
-// Variabel untuk progress total real-time
 let totalDurasiDetik = 0;
 let sisaDetikBerjalan = 0;
 
-// Status 4 Lampu Tambahan
+// Status 4 Saklar (Lampu 1-3 & Relay 4 untuk Charger HP)
 const statusLampu = { 1: false, 2: false, 3: false, 4: false };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -121,6 +120,134 @@ function kirimNotifikasiSelesai() {
     }
 }
 
+// ==================== PERINTAH SUARA KONTINYU & RESPON AUDIO ====================
+let recognition = null;
+let isContinuousActive = false;
+
+function toggleVoiceControl() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+        alert("Browser kamu tidak mendukung Web Speech API. Gunakan Google Chrome.");
+        return;
+    }
+
+    if (!recognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'id-ID'; // Bahasa Indonesia
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.continuous = true; 
+
+        recognition.onstart = function() {
+            isContinuousActive = true;
+            updateVoiceBtnUI(true);
+            log("[Voice] Mode Asisten Suara Aktif. Silakan bicara kapan saja...");
+        };
+
+        recognition.onresult = function(event) {
+            const speechResult = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
+            log(`[Voice Mendengar]: "${speechResult}"`);
+            prosesPerintahSuara(speechResult);
+        };
+
+        recognition.onerror = function(event) {
+            log("[Voice Error]: " + event.error);
+            if (event.error === 'no-speech' && isContinuousActive) {
+                return;
+            }
+        };
+
+        recognition.onend = function() {
+            if (isContinuousActive) {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.log("Restart mic error:", e);
+                }
+            } else {
+                updateVoiceBtnUI(false);
+                log("[Voice] Asisten Suara Dimatikan.");
+            }
+        };
+    }
+
+    if (isContinuousActive) {
+        isContinuousActive = false;
+        recognition.stop();
+        ucap("Asisten suara dimatikan.");
+    } else {
+        recognition.start();
+        ucap("Asisten suara siap. Silakan berikan perintah.");
+    }
+}
+
+function updateVoiceBtnUI(aktif) {
+    const btn = document.getElementById("btnVoice");
+    if (!btn) return;
+    if (aktif) {
+        btn.innerText = "🎙️ Asisten Suara: STANDBY (Mendengarkan...)";
+        btn.style.background = "#2e7d32";
+        btn.style.borderColor = "#4caf50";
+    } else {
+        btn.innerText = "🎤 Aktifkan Asisten Suara (Auto-Listen)";
+        btn.style.background = "#1a2332";
+        btn.style.borderColor = "#28303d";
+    }
+}
+
+function ucap(teks) {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(teks);
+        utterance.lang = 'id-ID';
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+    }
+}
+
+function prosesPerintahSuara(text) {
+    if (text.includes("cepat")) {
+        ucap("Oke, siap jalankan mode cepat.");
+        log("[Voice Exec] Menjalankan Mode Cepat");
+        kirimPerintah('CMD:1');
+    } else if (text.includes("normal")) {
+        ucap("Siap, mode normal diaktifkan.");
+        log("[Voice Exec] Menjalankan Mode Normal");
+        kirimPerintah('CMD:2');
+    } else if (text.includes("berat")) {
+        ucap("Baik, mode berat.");
+        log("[Voice Exec] Menjalankan Mode Berat");
+        kirimPerintah('CMD:3');
+    } else if (text.includes("spin") || text.includes("peras")) {
+        ucap("Siap, memproses peras.");
+        log("[Voice Exec] Menjalankan Spin");
+        jalankanSpinCustom();
+    } else if (text.includes("cuci saja")) {
+        ucap("Siap, mencuci saja.");
+        log("[Voice Exec] Menjalankan Cuci Saja");
+        jalankanCuciSajaCustom();
+    } else if (text.includes("stop") || text.includes("darurat") || text.includes("berhenti")) {
+        ucap("Perhatian! Darurat dihentikan!");
+        log("[Voice Exec] STOP DARURAT");
+        kirimPerintah('CMD:STOP');
+    } else if (text.includes("charger hidup") || text.includes("nyalakan charger") || text.includes("charger nyala")) {
+        ucap("Charger HP dinyalakan.");
+        toggleLampu(4);
+    } else if (text.includes("charger mati") || text.includes("matikan charger")) {
+        ucap("Charger HP dimatikan.");
+        toggleLampu(4);
+    } else if (text.includes("lampu satu hidup") || text.includes("nyalakan lampu satu")) {
+        ucap("Lampu 1 dinyalakan.");
+        toggleLampu(1);
+    } else if (text.includes("lampu satu mati") || text.includes("matikan lampu satu")) {
+        ucap("Lampu 1 dimatikan.");
+        toggleLampu(1);
+    } else {
+        log(`[Voice] Perintah "${text}" tidak dikenali.`);
+    }
+}
+
 // ==================== KONEKSI HYBRID (MQTT & BLE) ====================
 function gantiModeKoneksi(mode) {
     modeAktif = mode;
@@ -182,7 +309,7 @@ async function connectBLE() {
         bleServer = await bleDevice.gatt.connect();
         const service = await bleServer.getPrimaryService(SERVICE_UUID);
         bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
-        
+
         const txCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID_TX);
         await txCharacteristic.startNotifications();
         txCharacteristic.addEventListener('characteristicvaluechanged', handleBLENotify);
@@ -227,15 +354,11 @@ function jalankanCuciSajaCustom() {
     kirimPerintah(`CMD:5:${durasi}`);
 }
 
-// ==================== KONTROL SAKLAR LAMPU TAMBAHAN (OPTIMISTIC UI) ====================
+// ==================== KONTROL SAKLAR (OPTIMISTIC UI) ====================
 function toggleLampu(noLampu) {
-    // 1. Toggle status secara langsung
     statusLampu[noLampu] = !statusLampu[noLampu];
-    
-    // 2. Tampilkan animasi & status di UI Web langsung saat diklik
     updateUIStatusLampu(noLampu, statusLampu[noLampu]);
-    
-    // 3. Kirim perintah teks ke ESP32
+
     const cmd = `LAMPU${noLampu}_${statusLampu[noLampu] ? "ON" : "OFF"}`;
     kirimPerintah(cmd);
 }
@@ -244,7 +367,7 @@ function updateUIStatusLampu(noLampu, isNyala) {
     statusLampu[noLampu] = isNyala;
     const btn = document.getElementById(`btnLampu${noLampu}`);
     const card = document.getElementById(`cardLampu${noLampu}`);
-    
+
     if (btn) btn.innerText = isNyala ? "ON" : "OFF";
     if (card) {
         if (isNyala) {
@@ -255,18 +378,19 @@ function updateUIStatusLampu(noLampu, isNyala) {
     }
 }
 
-// ==================== KIRIM PERINTAH & PARSER PAYLOAD ====================
+// ==================== KIRIM PERINTAH & PARSER ====================
 function kirimPerintah(cmd) {
     if (cmd.startsWith("CMD:") && cmd !== "CMD:STOP") {
         startLapTimer();
         setProgressRing(0);
-        totalDurasiDetik = 0; // Reset acuan progress total
+        totalDurasiDetik = 0;
     } else if (cmd === "CMD:STOP") {
         stopLapTimer();
         totalDurasiDetik = 0;
         updateElemenTeks("namaProsesAktif", "DIHENTIKAN");
         updateElemenTeks("prosesStepTimer", "0s");
         updateElemenTeks("percentLabel", "0%");
+        updateEspStatus("DIHENTIKAN");
         setProgressRing(0);
         updateHardwareUI("KOSONG", "OFF", "OFF", "OFF");
     }
@@ -300,6 +424,9 @@ function prosesPayloadData(payload) {
         payload = payload.replace("STATUS:", "").trim();
     }
 
+    // Tampilkan balasan / status mentah dari ESP32 langsung ke tengah lingkaran
+    updateEspStatus(payload);
+
     if (payload.startsWith("TIMER|")) {
         const parts = payload.split("|");
         const namaProses = parts[1] ? parts[1].trim() : "PROSES";
@@ -315,16 +442,15 @@ function prosesPayloadData(payload) {
         }
         prosesSebelumnya = namaProses;
 
-        // --- PROGRESS TOTAL REAL-TIME ---
         if (!isNaN(sisaAngka) && sisaAngka > 0) {
             if (totalDurasiDetik === 0 || sisaAngka > totalDurasiDetik) {
-                totalDurasiDetik = sisaAngka; // Rekam durasi maksimal awal
+                totalDurasiDetik = sisaAngka;
             }
             sisaDetikBerjalan = sisaAngka;
-            
+
             const elapsed = totalDurasiDetik - sisaDetikBerjalan;
             const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalDurasiDetik) * 100)));
-            
+
             setProgressRing(percent);
             updateElemenTeks("percentLabel", percent + "%");
         }
@@ -336,7 +462,6 @@ function prosesPayloadData(payload) {
         const kananMatch = payload.match(/KANAN:(ON|OFF)/);
         const motorMatch = payload.match(/MOTOR:(KIRI|KANAN|ON|OFF)/);
 
-        // Match 4 Saklar Lampu Tambahan
         const l1Match = payload.match(/L1:(ON|OFF)/);
         const l2Match = payload.match(/L2:(ON|OFF)/);
         const l3Match = payload.match(/L3:(ON|OFF)/);
@@ -345,7 +470,7 @@ function prosesPayloadData(payload) {
         const water = waterMatch ? waterMatch[1] : "-";
         const inlet = inletMatch ? inletMatch[1] : "OFF";
         const drain = drainMatch ? drainMatch[1] : "OFF";
-        
+
         let motor = "OFF";
         if (kiriMatch && kiriMatch[1] === "ON") motor = "KIRI";
         else if (kananMatch && kananMatch[1] === "ON") motor = "KANAN";
@@ -353,7 +478,6 @@ function prosesPayloadData(payload) {
 
         updateHardwareUI(water, inlet, drain, motor);
 
-        // Sinkronkan status lampu dari feedback ESP32
         if (l1Match) updateUIStatusLampu(1, l1Match[1] === "ON");
         if (l2Match) updateUIStatusLampu(2, l2Match[1] === "ON");
         if (l3Match) updateUIStatusLampu(3, l3Match[1] === "ON");
@@ -363,7 +487,7 @@ function prosesPayloadData(payload) {
         stopLapTimer();
         totalDurasiDetik = 0;
         const statusAkhir = payload.includes("SELESAI") ? "SELESAI" : "DIHENTIKAN";
-        
+
         updateElemenTeks("namaProsesAktif", statusAkhir);
         updateElemenTeks("prosesStepTimer", "0s");
         updateElemenTeks("percentLabel", statusAkhir === "SELESAI" ? "100%" : "0%");
@@ -383,6 +507,11 @@ function prosesPayloadData(payload) {
 // ==================== UTILITAS UI ====================
 function updateElemenTeks(id, teks) {
     const elem = document.getElementById(id);
+    if (elem) elem.innerText = teks;
+}
+
+function updateEspStatus(teks) {
+    const elem = document.getElementById("espStatusDisplay");
     if (elem) elem.innerText = teks;
 }
 
@@ -426,18 +555,4 @@ function updateHardwareUI(water, inlet, drain, motor) {
 
     const hwWater = document.getElementById("hwWater");
     const hwInlet = document.getElementById("hwInlet");
-    const hwDrain = document.getElementById("hwDrain");
-    const hwMotor = document.getElementById("hwMotor");
-
-    if (hwWater) hwWater.className = `hw-item ${water === "PENUH" ? "active" : ""}`;
-    if (hwInlet) hwInlet.className = `hw-item ${inlet === "ON" ? "active" : ""}`;
-    if (hwDrain) hwDrain.className = `hw-item ${drain === "ON" ? "active" : ""}`;
-    if (hwMotor) hwMotor.className = `hw-item ${motor !== "OFF" ? "active" : ""}`;
-}
-
-function log(msg) {
-    const box = document.getElementById("logTerminal");
-    if (!box) return;
-    box.innerHTML += msg + "<br>";
-    box.scrollTop = box.scrollHeight;
-}
+    const hwDra
