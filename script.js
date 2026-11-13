@@ -206,6 +206,13 @@ function ucap(teks) {
     }
 }
 
+function setLampuLangsung(noLampu, nyala, pesanSuara) {
+    if (statusLampu[noLampu] !== nyala) {
+        toggleLampu(noLampu);
+    }
+    ucap(pesanSuara);
+}
+
 function prosesPerintahSuara(text) {
     if (text.includes("cepat")) {
         ucap("Oke, siap jalankan mode cepat.");
@@ -232,17 +239,21 @@ function prosesPerintahSuara(text) {
         log("[Voice Exec] STOP DARURAT");
         kirimPerintah('CMD:STOP');
     } else if (text.includes("charger hidup") || text.includes("nyalakan charger") || text.includes("charger nyala")) {
-        ucap("Charger HP dinyalakan.");
-        toggleLampu(4);
+        setLampuLangsung(4, true, "Charger HP dinyalakan.");
     } else if (text.includes("charger mati") || text.includes("matikan charger")) {
-        ucap("Charger HP dimatikan.");
-        toggleLampu(4);
-    } else if (text.includes("lampu satu hidup") || text.includes("nyalakan lampu satu")) {
-        ucap("Lampu 1 dinyalakan.");
-        toggleLampu(1);
-    } else if (text.includes("lampu satu mati") || text.includes("matikan lampu satu")) {
-        ucap("Lampu 1 dimatikan.");
-        toggleLampu(1);
+        setLampuLangsung(4, false, "Charger HP dimatikan.");
+    } else if (text.includes("lampu satu hidup") || text.includes("lampu 1 hidup") || text.includes("nyalakan lampu satu") || text.includes("nyalakan lampu 1")) {
+        setLampuLangsung(1, true, "Lampu 1 dinyalakan.");
+    } else if (text.includes("lampu satu mati") || text.includes("lampu 1 mati") || text.includes("matikan lampu satu") || text.includes("matikan lampu 1")) {
+        setLampuLangsung(1, false, "Lampu 1 dimatikan.");
+    } else if (text.includes("lampu dua hidup") || text.includes("lampu 2 hidup") || text.includes("nyalakan lampu dua") || text.includes("nyalakan lampu 2")) {
+        setLampuLangsung(2, true, "Lampu 2 dinyalakan.");
+    } else if (text.includes("lampu dua mati") || text.includes("lampu 2 mati") || text.includes("matikan lampu dua") || text.includes("matikan lampu 2")) {
+        setLampuLangsung(2, false, "Lampu 2 dimatikan.");
+    } else if (text.includes("lampu tiga hidup") || text.includes("lampu 3 hidup") || text.includes("nyalakan lampu tiga") || text.includes("nyalakan lampu 3")) {
+        setLampuLangsung(3, true, "Lampu 3 dinyalakan.");
+    } else if (text.includes("lampu tiga mati") || text.includes("lampu 3 mati") || text.includes("matikan lampu tiga") || text.includes("matikan lampu 3")) {
+        setLampuLangsung(3, false, "Lampu 3 dimatikan.");
     } else {
         log(`[Voice] Perintah "${text}" tidak dikenali.`);
     }
@@ -421,7 +432,7 @@ function onMessageArrived(message) {
 
 function prosesPayloadData(payload) {
     if (payload.startsWith("STATUS:")) {
-        payload = payload.replace("STATUS:", "").trim();
+        payload = payload.replace(/^STATUS:/, "").trim();
     }
 
     // Tampilkan balasan / status mentah dari ESP32 langsung ke tengah lingkaran
@@ -555,4 +566,19 @@ function updateHardwareUI(water, inlet, drain, motor) {
 
     const hwWater = document.getElementById("hwWater");
     const hwInlet = document.getElementById("hwInlet");
-    const hwDra
+    const hwDrain = document.getElementById("hwDrain");
+    const hwMotor = document.getElementById("hwMotor");
+
+    if (hwWater) hwWater.classList.toggle("active", water === "PENUH");
+    if (hwInlet) hwInlet.classList.toggle("active", inlet === "ON");
+    if (hwDrain) hwDrain.classList.toggle("active", drain === "ON");
+    if (hwMotor) hwMotor.classList.toggle("active", motor !== "OFF");
+}
+
+function log(pesan) {
+    const logBox = document.getElementById("logTerminal");
+    if (!logBox) return;
+    const waktu = new Date().toLocaleTimeString('id-ID', { hour12: false });
+    logBox.innerHTML += `[${waktu}] ${pesan}<br>`;
+    logBox.scrollTop = logBox.scrollHeight;
+}
