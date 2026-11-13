@@ -1,4 +1,59 @@
-<!-- Monitoring Ring Display -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Washer Hybrid Control</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Paho MQTT Library untuk Web -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+</head>
+<body>
+
+    <div class="card">
+        <!-- Header -->
+        <div class="header">
+            <h2>Smart Washer Controller</h2>
+            <span id="statusKoneksi" class="connection-status">OFFLINE</span>
+        </div>
+
+        <!-- Tombol Izin Notifikasi & Getar -->
+        <button id="btnNotif" class="btn-notif" onclick="mintaIzinNotifikasi()">🔔 Aktifkan Notifikasi & Getar HP</button>
+
+        <!-- Tombol Asisten Perintah Suara (Auto-Listen) -->
+        <button id="btnVoice" class="btn-notif" onclick="toggleVoiceControl()" style="background: #1a2332; border-color: #28303d;">🎤 Aktifkan Asisten Suara (Auto-Listen)</button>
+
+        <!-- SAKLAR LAMPU & CHARGER HP (RELAY 1 - 4) -->
+        <div class="light-section">
+            <h3>KONTROL LAMPU & CHARGER HP</h3>
+            <div class="light-switches-grid">
+                <div class="light-card" id="cardLampu1">
+                    <span class="light-title">Lampu 1</span>
+                    <button class="btn-toggle-light" id="btnLampu1" onclick="toggleLampu(1)">OFF</button>
+                </div>
+                <div class="light-card" id="cardLampu2">
+                    <span class="light-title">Lampu 2</span>
+                    <button class="btn-toggle-light" id="btnLampu2" onclick="toggleLampu(2)">OFF</button>
+                </div>
+                <div class="light-card" id="cardLampu3">
+                    <span class="light-title">Lampu 3</span>
+                    <button class="btn-toggle-light" id="btnLampu3" onclick="toggleLampu(3)">OFF</button>
+                </div>
+                <div class="light-card" id="cardLampu4">
+                    <span class="light-title">Charger HP</span>
+                    <button class="btn-toggle-light" id="btnLampu4" onclick="toggleLampu(4)">OFF</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Countdown / Hitung Mundur -->
+        <div class="countdown-card">
+            <span id="namaProsesAktif" class="countdown-title">SIAP DIGUNAKAN</span>
+            <div id="prosesStepTimer" class="countdown-timer">00:00</div>
+            <div id="totalLapTimer" class="lap-timer">Total: 00:00</div>
+        </div>
+
+        <!-- Monitoring Ring Display (Bersih tanpa teks status mentah) -->
         <div class="ring-container">
             <svg class="progress-ring" width="180" height="180">
                 <circle stroke="#212733" stroke-width="10" fill="transparent" r="80" cx="90" cy="90"/>
@@ -9,3 +64,90 @@
                 <span id="percentLabel" style="font-size: 28px; font-weight: bold; color: #fff;">0%</span>
             </div>
         </div>
+
+        <!-- Hardware Monitoring Grid -->
+        <div class="hardware-grid">
+            <div id="hwWater" class="hw-item">
+                <span class="hw-title">AIR</span>
+                <span id="statusWaterVal" class="hw-status">-</span>
+            </div>
+            <div id="hwInlet" class="hw-item">
+                <span class="hw-title">INLET</span>
+                <span id="statusInletVal" class="hw-status">OFF</span>
+            </div>
+            <div id="hwDrain" class="hw-item">
+                <span class="hw-title">DRAIN</span>
+                <span id="statusDrainVal" class="hw-status">OFF</span>
+            </div>
+            <div id="hwMotor" class="hw-item">
+                <span class="hw-title">MOTOR</span>
+                <span id="statusMotorVal" class="hw-status">OFF</span>
+            </div>
+        </div>
+
+        <!-- Pilihan Mode Koneksi -->
+        <div class="connection-control">
+            <div class="mode-selector">
+                <label><input type="radio" name="connMode" value="MQTT" checked onclick="gantiModeKoneksi('MQTT')"> MQTT (HiveMQ)</label>
+                <label><input type="radio" name="connMode" value="BLE" onclick="gantiModeKoneksi('BLE')"> Bluetooth (BLE)</label>
+            </div>
+            <button id="btnConnect" class="btn-connect" onclick="hubungkanPerangkat()">Hubungkan ke MQTT</button>
+        </div>
+
+        <!-- Slider Pengaturan Durasi -->
+        <div class="slider-card">
+            <div class="slider-header">
+                <span>PENGATURAN DURASI MANUAL</span>
+                <span id="labelDurasiVal">5 Menit</span>
+            </div>
+            <input type="range" id="sliderDurasi" min="1" max="15" value="5" class="large-slider" oninput="updateSliderLabel(this.value)">
+            <div class="slider-info">Digunakan untuk tombol "Spin Only" & "Cuci Saja"</div>
+        </div>
+
+        <!-- 5 Tombol Mode Cuci -->
+        <h3>PILIHAN PROGRAM OTOMATIS & MANUAL</h3>
+        <div class="circle-buttons-grid">
+            <div class="circle-btn-wrapper" onclick="kirimPerintah('CMD:1')">
+                <div class="btn-circle btn-mode1">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                </div>
+                <span class="btn-label">Cepat</span>
+            </div>
+            <div class="circle-btn-wrapper" onclick="kirimPerintah('CMD:2')">
+                <div class="btn-circle btn-mode2">
+                    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 5h2v5h-2z"/></svg>
+                </div>
+                <span class="btn-label">Normal</span>
+            </div>
+            <div class="circle-btn-wrapper" onclick="kirimPerintah('CMD:3')">
+                <div class="btn-circle btn-mode3">
+                    <svg viewBox="0 0 24 24"><path d="M12 3L2 12h3v8h14v-8h3L12 3zm0 3.84L17.16 11H18v7H6v-7h.84L12 6.84z"/></svg>
+                </div>
+                <span class="btn-label">Berat</span>
+            </div>
+            <div class="circle-btn-wrapper" onclick="jalankanSpinCustom()">
+                <div class="btn-circle btn-spin">
+                    <svg viewBox="0 0 24 24"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8C6.25 14.04 6 13.14 6 12c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.76.7 1.66.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg>
+                </div>
+                <span class="btn-label">Spin</span>
+            </div>
+            <div class="circle-btn-wrapper" onclick="jalankanCuciSajaCustom()">
+                <div class="btn-circle btn-wash-only">
+                    <svg viewBox="0 0 24 24"><path d="M12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+                </div>
+                <span class="btn-label">Cuci Saja</span>
+            </div>
+        </div>
+
+        <!-- Tombol Stop Darurat -->
+        <button class="btn-stop" onclick="kirimPerintah('CMD:STOP')">STOP DARURAT</button>
+
+        <!-- Terminal Log System -->
+        <div id="logTerminal" class="log-box">
+            [System] Dashboard siap terhubung...<br>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
