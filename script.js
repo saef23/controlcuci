@@ -227,13 +227,41 @@ function prosesPerintahSuara(text) {
         log("[Voice Exec] Menjalankan Mode Berat");
         kirimPerintah('CMD:3');
     } else if (text.includes("spin") || text.includes("peras")) {
-        ucap("Siap, memproses peras.");
-        log("[Voice Exec] Menjalankan Spin");
-        jalankanSpinCustom();
+        let durasi = 5;
+        const match = text.match(/\d+/);
+        if (match) {
+            durasi = parseInt(match[0]);
+        }
+        durasi = Math.min(Math.max(durasi, 1), 7);
+        
+        const slider = document.getElementById("sliderDurasi");
+        if (slider) {
+            slider.value = durasi;
+            updateSliderLabel(durasi);
+        }
+
+        ucap(`Siap, memproses peras selama ${durasi} menit.`);
+        log(`[Voice Exec] Menjalankan Spin Custom (${durasi}m)`);
+        kirimPerintah(`CMD:4:${durasi}`);
+        
     } else if (text.includes("cuci saja")) {
-        ucap("Siap, mencuci saja.");
-        log("[Voice Exec] Menjalankan Cuci Saja");
-        jalankanCuciSajaCustom();
+        let durasi = 10;
+        const match = text.match(/\d+/);
+        if (match) {
+            durasi = parseInt(match[0]);
+        }
+        durasi = Math.min(Math.max(durasi, 1), 15);
+
+        const slider = document.getElementById("sliderDurasi");
+        if (slider) {
+            slider.value = durasi;
+            updateSliderLabel(durasi);
+        }
+
+        ucap(`Siap, mencuci saja selama ${durasi} menit.`);
+        log(`[Voice Exec] Menjalankan Cuci Saja Custom (${durasi}m)`);
+        kirimPerintah(`CMD:5:${durasi}`);
+        
     } else if (text.includes("stop") || text.includes("darurat") || text.includes("berhenti")) {
         ucap("Perhatian! Darurat dihentikan!");
         log("[Voice Exec] STOP DARURAT");
