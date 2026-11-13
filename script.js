@@ -134,7 +134,7 @@ function toggleVoiceControl() {
 
     if (!recognition) {
         recognition = new SpeechRecognition();
-        recognition.lang = 'id-ID'; // Bahasa Indonesia
+        recognition.lang = 'id-ID';
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
         recognition.continuous = true; 
