@@ -126,6 +126,21 @@ let isContinuousActive = false;
 
 function toggleVoiceControl() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    } else if (text.includes("mqtt") || text.includes("internet") || text.includes("wifi")) {
+        const radioMqtt = document.querySelector('input[name="connMode"][value="MQTT"]');
+        if (radioMqtt) radioMqtt.checked = true;
+        gantiModeKoneksi("MQTT");
+        ucap("Siap, menghubungkan ke MQTT.");
+        log("[Voice Exec] Menghubungkan ke MQTT...");
+        connectMQTT();
+
+    } else if (text.includes("bluetooth") || text.includes("ble")) {
+        const radioBle = document.querySelector('input[name="connMode"][value="BLE"]');
+        if (radioBle) radioBle.checked = true;
+        gantiModeKoneksi("BLE");
+        ucap("Mode Bluetooth dipilih. Silakan tekan tombol hubungkan ke BLE di layar untuk memilih perangkat.");
+        log("[Voice Exec] Mode BLE dipilih (Menunggu klik tombol Hubungkan)");
     
     if (!SpeechRecognition) {
         alert("Browser kamu tidak mendukung Web Speech API. Gunakan Google Chrome.");
