@@ -126,21 +126,6 @@ let isContinuousActive = false;
 
 function toggleVoiceControl() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    } else if (text.includes("mqtt") || text.includes("internet") || text.includes("wifi")) {
-        const radioMqtt = document.querySelector('input[name="connMode"][value="MQTT"]');
-        if (radioMqtt) radioMqtt.checked = true;
-        gantiModeKoneksi("MQTT");
-        ucap("Siap, menghubungkan ke MQTT.");
-        log("[Voice Exec] Menghubungkan ke MQTT...");
-        connectMQTT();
-
-    } else if (text.includes("bluetooth") || text.includes("ble")) {
-        const radioBle = document.querySelector('input[name="connMode"][value="BLE"]');
-        if (radioBle) radioBle.checked = true;
-        gantiModeKoneksi("BLE");
-        ucap("Mode Bluetooth dipilih. Silakan tekan tombol hubungkan ke BLE di layar untuk memilih perangkat.");
-        log("[Voice Exec] Mode BLE dipilih (Menunggu klik tombol Hubungkan)");
     
     if (!SpeechRecognition) {
         alert("Browser kamu tidak mendukung Web Speech API. Gunakan Google Chrome.");
@@ -229,18 +214,36 @@ function setLampuLangsung(noLampu, nyala, pesanSuara) {
 }
 
 function prosesPerintahSuara(text) {
-    if (text.includes("cepat")) {
+    if (text.includes("mqtt") || text.includes("internet") || text.includes("wifi")) {
+        const radioMqtt = document.querySelector('input[name="connMode"][value="MQTT"]');
+        if (radioMqtt) radioMqtt.checked = true;
+        gantiModeKoneksi("MQTT");
+        ucap("Siap, menghubungkan ke MQTT.");
+        log("[Voice Exec] Menghubungkan ke MQTT...");
+        connectMQTT();
+
+    } else if (text.includes("bluetooth") || text.includes("ble")) {
+        const radioBle = document.querySelector('input[name="connMode"][value="BLE"]');
+        if (radioBle) radioBle.checked = true;
+        gantiModeKoneksi("BLE");
+        ucap("Mode Bluetooth dipilih. Silakan tekan tombol hubungkan ke BLE di layar untuk memilih perangkat.");
+        log("[Voice Exec] Mode BLE dipilih (Menunggu klik tombol Hubungkan)");
+
+    } else if (text.includes("cepat")) {
         ucap("Oke, siap jalankan mode cepat.");
         log("[Voice Exec] Menjalankan Mode Cepat");
         kirimPerintah('CMD:1');
+
     } else if (text.includes("normal")) {
         ucap("Siap, mode normal diaktifkan.");
         log("[Voice Exec] Menjalankan Mode Normal");
         kirimPerintah('CMD:2');
+
     } else if (text.includes("berat")) {
         ucap("Baik, mode berat.");
         log("[Voice Exec] Menjalankan Mode Berat");
         kirimPerintah('CMD:3');
+
     } else if (text.includes("spin") || text.includes("peras")) {
         let durasi = 5;
         const match = text.match(/\d+/);
@@ -281,6 +284,7 @@ function prosesPerintahSuara(text) {
         ucap("Perhatian! Darurat dihentikan!");
         log("[Voice Exec] STOP DARURAT");
         kirimPerintah('CMD:STOP');
+
     } else if (text.includes("charger hidup") || text.includes("nyalakan charger") || text.includes("charger nyala")) {
         setLampuLangsung(4, true, "Charger HP dinyalakan.");
     } else if (text.includes("charger mati") || text.includes("matikan charger")) {
