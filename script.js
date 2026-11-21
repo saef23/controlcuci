@@ -123,9 +123,9 @@ function kirimNotifikasiSelesai() {
 // ==================== PERINTAH SUARA KONTINYU & RESPON AUDIO ====================
 let recognition = null;
 let isContinuousActive = false;
-let wakeWordUnlockedUntil = 0; // Jendela waktu (ms) setelah dipanggil "abem"
+let wakeWordUnlockedUntil = 0;
 const WAKE_WORD = "abem";
-const FOLLOW_UP_WINDOW_MS = 8000; // 8 detik menunggu perintah lanjutan setelah "Siap bos"
+const FOLLOW_UP_WINDOW_MS = 8000;
 
 function toggleVoiceControl() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -140,17 +140,18 @@ function toggleVoiceControl() {
         recognition.lang = 'id-ID';
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
-        recognition.continuous = true;
+        recognition.continuous = false;
 
         recognition.onstart = function () {
             isContinuousActive = true;
             wakeWordUnlockedUntil = 0;
             updateVoiceBtnUI(true);
-            log(`[Voice] Mode Asisten Suara Aktif. Awali perintah dengan kata "${WAKE_WORD}".`);
+            log(`[Voice] Mode Asisten Suara Aktif. Panggil "${WAKE_WORD}"...`);
         };
 
         recognition.onresult = function (event) {
-            const speechResult = event.results[event.results.length - 1][0].transcript
+            const lastIdx = event.results.length - 1;
+            const speechResult = event.results[lastIdx][0].transcript
                 .toLowerCase()
                 .trim();
             log(`[Voice Mendengar]: "${speechResult}"`);
@@ -158,19 +159,24 @@ function toggleVoiceControl() {
         };
 
         recognition.onerror = function (event) {
-            log("[Voice Error]: " + event.error);
-            if (event.error === 'no-speech' && isContinuousActive) {
-                return;
+            log(`[Voice Error]: ${event.error}`);
+            if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                isContinuousActive = false;
+                updateVoiceBtnUI(false);
+                alert("Akses mikrofon ditolak! Aktifkan izin mic di pengaturan situs browser.");
             }
         };
 
         recognition.onend = function () {
             if (isContinuousActive) {
-                try {
-                    recognition.start();
-                } catch (e) {
-                    console.log("Restart mic error:", e);
-                }
+                setTimeout(() => {
+                    if (!isContinuousActive) return;
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        log("[Voice Restart Info]: " + e.message);
+                    }
+                }, 150);
             } else {
                 wakeWordUnlockedUntil = 0;
                 updateVoiceBtnUI(false);
@@ -182,17 +188,23 @@ function toggleVoiceControl() {
     if (isContinuousActive) {
         isContinuousActive = false;
         wakeWordUnlockedUntil = 0;
-        recognition.stop();
+        try {
+            recognition.stop();
+        } catch (e) {}
         ucap("Asisten suara dimatikan.");
     } else {
-        recognition.start();
-        ucap("Asisten suara siap. Panggil abem sebelum memberi perintah.");
+        try {
+            recognition.start();
+            ucap("Asisten suara siap. Panggil abem sebelum memberi perintah.");
+        } catch (e) {
+            log("[Voice Start Error]: " + e.message);
+        }
     }
 }
 
 function handleWakeWordDanPerintah(rawText) {
     const sekarang = Date.now();
-    const wakeRegex = /\babem\b/i;
+    const wakeRegex = /\b(a\s*bem|abem|abim|abam|aben|ahem|adem)\b/i;
     const punyaWakeWord = wakeRegex.test(rawText);
 
     if (punyaWakeWord) {
@@ -200,13 +212,13 @@ function handleWakeWordDanPerintah(rawText) {
 
         if (!setelahWake) {
             wakeWordUnlockedUntil = sekarang + FOLLOW_UP_WINDOW_MS;
-            log('[Voice] Wake word "abem" terdeteksi -> Balas: "Siap bos"');
+            log('[Voice] Wake word terdeteksi -> Balas: "Siap bos"');
             ucap("Siap bos");
             return;
         }
 
         wakeWordUnlockedUntil = 0;
-        log(`[Voice] Wake word "abem" terdeteksi -> Eksekusi: "${setelahWake}"`);
+        log(`[Voice] Wake word terdeteksi -> Eksekusi: "${setelahWake}"`);
         prosesPerintahSuara(setelahWake);
         return;
     }
@@ -234,12 +246,21 @@ function updateVoiceBtnUI(aktif) {
 }
 
 function ucap(teks) {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(teks);
-        utterance.lang = 'id-ID';
-        utterance.rate = 1.0;
-        window.speechSynthesis.speak(utterance);
+    try {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(teks);
+            utterance.lang = 'id-ID';
+            utterance.rate = 1.0;
+
+            const voices = window.speechSynthesis.getVoices();
+            const indoVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('id'));
+            if (indoVoice) utterance.voice = indoVoice;
+
+            window.speechSynthesis.speak(utterance);
+        }
+    } catch (e) {
+        console.log("TTS Error:", e);
     }
 }
 
@@ -326,9 +347,9 @@ function prosesPerintahSuara(text) {
         setLampuLangsung(4, true, "Charger HP dinyalakan.");
     } else if (text.includes("charger mati") || text.includes("matikan charger")) {
         setLampuLangsung(4, false, "Charger HP dimatikan.");
-    } else if (text.includes("kipas hidup") || text.includes("kipas hidup") || text.includes("nyalakan kipas") || text.includes("nyalakan kipas")) {
-        setLampuLangsung(1, true, "kipas dinyalakan.");
-    } else if (text.includes("kipas mati") || text.includes("kipas mati") || text.includes("matikan kipas") || text.includes("kipas mati")) {
+    } else if (text.includes("kipas hidup") || text.includes("nyalakan kipas")) {
+        setLampuLangsung(1, true, "Kipas dinyalakan.");
+    } else if (text.includes("kipas mati") || text.includes("matikan kipas")) {
         setLampuLangsung(1, false, "Kipas dimatikan.");
     } else if (text.includes("lampu dua hidup") || text.includes("lampu 2 hidup") || text.includes("nyalakan lampu dua") || text.includes("nyalakan lampu 2")) {
         setLampuLangsung(2, true, "Lampu 2 dinyalakan.");
