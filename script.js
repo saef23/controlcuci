@@ -1,4 +1,3 @@
-// ==================== KONFIGURASI MQTT & BLE ====================
 let mqttClient;
 const mqttBroker = "broker.hivemq.com";
 const mqttPort   = 8884; // Port WSS HiveMQ (SSL)
@@ -535,10 +534,29 @@ function onMessageArrived(message) {
 }
 
 function prosesPayloadData(payload) {
+    log("ESP32: " + payload);
+
     if (payload.startsWith("STATUS:")) {
         payload = payload.replace(/^STATUS:/, "").trim();
     }
 
+    // Format Telemetri Hardware: HW|AIR|INLET|DRAIN|MOTOR
+    if (payload.startsWith("HW|")) {
+        const parts = payload.split("|");
+        updateHardwareUI(parts[1], parts[2], parts[3], parts[4]);
+        return;
+    }
+
+    // Format Telemetri Saklar Lampu: LAMPU|ID|STATUS (misal: LAMPU|1|ON)
+    if (payload.startsWith("LAMPU|")) {
+        const parts = payload.split("|");
+        const no = parseInt(parts[1]);
+        const state = parts[2] === "ON";
+        updateUIStatusLampu(no, state);
+        return;
+    }
+
+    // Format Timer Telemetri: TIMER|PROSES|SISA_DETIK|TOTAL_DETIK
     if (payload.startsWith("TIMER|")) {
         const parts = payload.split("|");
         const namaProses = parts[1] ? parts[1].trim() : "PROSES";
@@ -548,4 +566,104 @@ function prosesPayloadData(payload) {
         updateElemenTeks("namaProsesAktif", namaProses.toUpperCase());
         updateElemenTeks("prosesStepTimer", sisaWaktuStr);
 
-        if (prosesSebelumnya !== "" && prosesSe
+        if (prosesSebelumnya !== namaProses) {
+            prosesSebelumnya = namaProses;
+            pemicuGetarDanBeep(150);
+        }
+
+        if (parts.length >= 4) {
+            const totDetik = parseInt(parts[3]);
+            if (!isNaN(totDetik) && totDetik > 0) {
+                totalDurasiDetik = totDetik;
+            }
+        }
+
+        if (totalDurasiDetik > 0 && !isNaN(sisaAngka)) {
+            const terlewati = totalDurasiDetik - sisaAngka;
+            let persen = Math.floor((terlewati / totalDurasiDetik) * 100);
+            persen = Math.min(Math.max(persen, 0), 100);
+            updateElemenTeks("percentLabel", persen + "%");
+            setProgressRing(persen);
+        }
+
+        if (namaProses.toUpperCase() === "SELESAI" || sisaAngka === 0) {
+            stopLapTimer();
+            updateElemenTeks("percentLabel", "100%");
+            setProgressRing(100);
+            kirimNotifikasiSelesai();
+        }
+    }
+}
+
+// ==================== HELPER FUNGSIONAL UI ====================
+function setProgressRing(percent) {
+    const circle = document.getElementById("circleProgress");
+    if (!circle) return;
+    const offset = circumference - (percent / 100) * circumference;
+    circle.style.strokeDashoffset = offset;
+}
+
+function startLapTimer() {
+    stopLapTimer();
+    lapDetikTotal = 0;
+    updateLapDisplay();
+    lapInterval = setInterval(() => {
+        lapDetikTotal++;
+        updateLapDisplay();
+    }, 1000);
+}
+
+function stopLapTimer() {
+    if (lapInterval) {
+        clearInterval(lapInterval);
+        lapInterval = null;
+    }
+}
+
+function updateLapDisplay() {
+    const menit = Math.floor(lapDetikTotal / 60);
+    const detik = lapDetikTotal % 60;
+    const mStr = menit < 10 ? "0" + menit : menit;
+    const dStr = detik < 10 ? "0" + detik : detik;
+    updateElemenTeks("totalLapTimer", `Total: ${mStr}:${dStr}`);
+}
+
+function updateHardwareUI(water, inlet, drain, motor) {
+    const hwWater = document.getElementById("hwWater");
+    const hwInlet = document.getElementById("hwInlet");
+    const hwDrain = document.getElementById("hwDrain");
+    const hwMotor = document.getElementById("hwMotor");
+
+    updateElemenTeks("statusWaterVal", water || "-");
+    updateElemenTeks("statusInletVal", inlet || "OFF");
+    updateElemenTeks("statusDrainVal", drain || "OFF");
+    updateElemenTeks("statusMotorVal", motor || "OFF");
+
+    if (hwWater) hwWater.classList.toggle("active", water === "PENUH");
+    if (hwInlet) hwInlet.classList.toggle("active", inlet === "ON");
+    if (hwDrain) hwDrain.classList.toggle("active", drain === "ON");
+    if (hwMotor) hwMotor.classList.toggle("active", motor === "ON");
+}
+
+function updateStatusUI(text, bgColor, textColor) {
+    const statusEl = document.getElementById("statusKoneksi");
+    if (statusEl) {
+        statusEl.innerText = text;
+        statusEl.style.background = bgColor;
+        statusEl.style.color = textColor;
+    }
+}
+
+function updateElemenTeks(id, teks) {
+    const el = document.getElementById(id);
+    if (el) el.innerText = teks;
+}
+
+function log(pesan) {
+    const terminal = document.getElementById("logTerminal");
+    if (terminal) {
+        const jam = new Date().toLocaleTimeString('id-ID');
+        terminal.innerHTML += `[${jam}] ${pesan}<br>`;
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+}
