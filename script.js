@@ -289,10 +289,10 @@ function prosesPerintahSuara(text) {
         setLampuLangsung(4, true, "Charger HP dinyalakan.");
     } else if (text.includes("charger mati") || text.includes("matikan charger")) {
         setLampuLangsung(4, false, "Charger HP dimatikan.");
-    } else if (text.includes("lampu satu hidup") || text.includes("lampu 1 hidup") || text.includes("nyalakan kipas") || text.includes("nyalakan kipas")) {
+    } else if (text.includes("kipas hidup") || text.includes("kipas hidup") || text.includes("nyalakan kipas") || text.includes("nyalakan kipas")) {
         setLampuLangsung(1, true, "kipas dinyalakan.");
-    } else if (text.includes("lampu satu mati") || text.includes("kipas mati") || text.includes("matikan kipas") || text.includes("matikan lampu 1")) {
-        setLampuLangsung(1, false, "Lampu 1 dimatikan.");
+    } else if (text.includes("kipas mati") || text.includes("kipas mati") || text.includes("matikan kipas") || text.includes("kipas mati")) {
+        setLampuLangsung(1, false, "Kipas dimatikan.");
     } else if (text.includes("lampu dua hidup") || text.includes("lampu 2 hidup") || text.includes("nyalakan lampu dua") || text.includes("nyalakan lampu 2")) {
         setLampuLangsung(2, true, "Lampu 2 dinyalakan.");
     } else if (text.includes("lampu dua mati") || text.includes("lampu 2 mati") || text.includes("matikan lampu dua") || text.includes("matikan lampu 2")) {
