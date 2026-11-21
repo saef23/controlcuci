@@ -123,9 +123,6 @@ function kirimNotifikasiSelesai() {
 // ==================== PERINTAH SUARA KONTINYU & RESPON AUDIO ====================
 let recognition = null;
 let isContinuousActive = false;
-let wakeWordUnlockedUntil = 0;
-const WAKE_WORD = "abem";
-const FOLLOW_UP_WINDOW_MS = 8000;
 
 function toggleVoiceControl() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -140,45 +137,35 @@ function toggleVoiceControl() {
         recognition.lang = 'id-ID';
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
-        recognition.continuous = false;
+        recognition.continuous = true; 
 
-        recognition.onstart = function () {
+        recognition.onstart = function() {
             isContinuousActive = true;
-            wakeWordUnlockedUntil = 0;
             updateVoiceBtnUI(true);
-            log(`[Voice] Mode Asisten Suara Aktif. Panggil "${WAKE_WORD}"...`);
+            log("[Voice] Mode Asisten Suara Aktif. Silakan bicara kapan saja...");
         };
 
-        recognition.onresult = function (event) {
-            const lastIdx = event.results.length - 1;
-            const speechResult = event.results[lastIdx][0].transcript
-                .toLowerCase()
-                .trim();
+        recognition.onresult = function(event) {
+            const speechResult = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
             log(`[Voice Mendengar]: "${speechResult}"`);
-            handleWakeWordDanPerintah(speechResult);
+            prosesPerintahSuara(speechResult);
         };
 
-        recognition.onerror = function (event) {
-            log(`[Voice Error]: ${event.error}`);
-            if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                isContinuousActive = false;
-                updateVoiceBtnUI(false);
-                alert("Akses mikrofon ditolak! Aktifkan izin mic di pengaturan situs browser.");
+        recognition.onerror = function(event) {
+            log("[Voice Error]: " + event.error);
+            if (event.error === 'no-speech' && isContinuousActive) {
+                return;
             }
         };
 
-        recognition.onend = function () {
+        recognition.onend = function() {
             if (isContinuousActive) {
-                setTimeout(() => {
-                    if (!isContinuousActive) return;
-                    try {
-                        recognition.start();
-                    } catch (e) {
-                        log("[Voice Restart Info]: " + e.message);
-                    }
-                }, 150);
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.log("Restart mic error:", e);
+                }
             } else {
-                wakeWordUnlockedUntil = 0;
                 updateVoiceBtnUI(false);
                 log("[Voice] Asisten Suara Dimatikan.");
             }
@@ -187,47 +174,11 @@ function toggleVoiceControl() {
 
     if (isContinuousActive) {
         isContinuousActive = false;
-        wakeWordUnlockedUntil = 0;
-        try {
-            recognition.stop();
-        } catch (e) {}
+        recognition.stop();
         ucap("Asisten suara dimatikan.");
     } else {
-        try {
-            recognition.start();
-            ucap("Asisten suara siap. Panggil abem sebelum memberi perintah.");
-        } catch (e) {
-            log("[Voice Start Error]: " + e.message);
-        }
-    }
-}
-
-function handleWakeWordDanPerintah(rawText) {
-    const sekarang = Date.now();
-    const wakeRegex = /\b(a\s*bem|abem|abim|abam|aben|ahem|adem)\b/i;
-    const punyaWakeWord = wakeRegex.test(rawText);
-
-    if (punyaWakeWord) {
-        const setelahWake = rawText.replace(wakeRegex, " ").replace(/\s+/g, " ").trim();
-
-        if (!setelahWake) {
-            wakeWordUnlockedUntil = sekarang + FOLLOW_UP_WINDOW_MS;
-            log('[Voice] Wake word terdeteksi -> Balas: "Siap bos"');
-            ucap("Siap bos");
-            return;
-        }
-
-        wakeWordUnlockedUntil = 0;
-        log(`[Voice] Wake word terdeteksi -> Eksekusi: "${setelahWake}"`);
-        prosesPerintahSuara(setelahWake);
-        return;
-    }
-
-    if (sekarang <= wakeWordUnlockedUntil) {
-        wakeWordUnlockedUntil = 0;
-        prosesPerintahSuara(rawText);
-    } else {
-        log(`[Voice] Diabaikan (tidak diawali kata kunci "${WAKE_WORD}"): "${rawText}"`);
+        recognition.start();
+        ucap("Asisten suara siap. Silakan berikan perintah.");
     }
 }
 
@@ -235,7 +186,7 @@ function updateVoiceBtnUI(aktif) {
     const btn = document.getElementById("btnVoice");
     if (!btn) return;
     if (aktif) {
-        btn.innerText = '🎙️ Asisten Suara: STANDBY (Panggil "Abem")';
+        btn.innerText = "🎙️ Asisten Suara: STANDBY (Mendengarkan...)";
         btn.style.background = "#2e7d32";
         btn.style.borderColor = "#4caf50";
     } else {
@@ -246,21 +197,12 @@ function updateVoiceBtnUI(aktif) {
 }
 
 function ucap(teks) {
-    try {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(teks);
-            utterance.lang = 'id-ID';
-            utterance.rate = 1.0;
-
-            const voices = window.speechSynthesis.getVoices();
-            const indoVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('id'));
-            if (indoVoice) utterance.voice = indoVoice;
-
-            window.speechSynthesis.speak(utterance);
-        }
-    } catch (e) {
-        console.log("TTS Error:", e);
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(teks);
+        utterance.lang = 'id-ID';
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
     }
 }
 
@@ -347,9 +289,9 @@ function prosesPerintahSuara(text) {
         setLampuLangsung(4, true, "Charger HP dinyalakan.");
     } else if (text.includes("charger mati") || text.includes("matikan charger")) {
         setLampuLangsung(4, false, "Charger HP dimatikan.");
-    } else if (text.includes("kipas hidup") || text.includes("nyalakan kipas")) {
-        setLampuLangsung(1, true, "Kipas dinyalakan.");
-    } else if (text.includes("kipas mati") || text.includes("matikan kipas")) {
+    } else if (text.includes("kipas hidup") || text.includes("kipas hidup") || text.includes("nyalakan kipas") || text.includes("nyalakan kipas")) {
+        setLampuLangsung(1, true, "kipas dinyalakan.");
+    } else if (text.includes("kipas mati") || text.includes("kipas mati") || text.includes("matikan kipas") || text.includes("kipas mati")) {
         setLampuLangsung(1, false, "Kipas dimatikan.");
     } else if (text.includes("lampu dua hidup") || text.includes("lampu 2 hidup") || text.includes("nyalakan lampu dua") || text.includes("nyalakan lampu 2")) {
         setLampuLangsung(2, true, "Lampu 2 dinyalakan.");
@@ -548,4 +490,48 @@ function prosesPayloadData(payload) {
         updateElemenTeks("namaProsesAktif", namaProses.toUpperCase());
         updateElemenTeks("prosesStepTimer", sisaWaktuStr);
 
-        if (prosesSebelumnya !== "" && prosesSe
+        if (prosesSebelumnya !== "" && prosesSebelumnya !== namaProses) {
+            pemicuGetarDanBeep(150);
+            log(`[Step] Pindah ke: ${namaProses}`);
+        }
+        prosesSebelumnya = namaProses;
+
+        if (!isNaN(sisaAngka) && sisaAngka > 0) {
+            if (totalDurasiDetik === 0 || sisaAngka > totalDurasiDetik) {
+                totalDurasiDetik = sisaAngka;
+            }
+            sisaDetikBerjalan = sisaAngka;
+
+            const elapsed = totalDurasiDetik - sisaDetikBerjalan;
+            const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalDurasiDetik) * 100)));
+
+            setProgressRing(percent);
+            updateElemenTeks("percentLabel", percent + "%");
+        }
+    } else if (payload.startsWith("DATA|")) {
+        const waterMatch = payload.match(/WATER:(PENUH|KOSONG)/);
+        const inletMatch = payload.match(/INLET:(ON|OFF)/);
+        const drainMatch = payload.match(/DRAIN:(ON|OFF)/);
+        const kiriMatch  = payload.match(/KIRI:(ON|OFF)/);
+        const kananMatch = payload.match(/KANAN:(ON|OFF)/);
+        const motorMatch = payload.match(/MOTOR:(KIRI|KANAN|ON|OFF)/);
+
+        const l1Match = payload.match(/L1:(ON|OFF)/);
+        const l2Match = payload.match(/L2:(ON|OFF)/);
+        const l3Match = payload.match(/L3:(ON|OFF)/);
+        const l4Match = payload.match(/L4:(ON|OFF)/);
+
+        const water = waterMatch ? waterMatch[1] : "-";
+        const inlet = inletMatch ? inletMatch[1] : "OFF";
+        const drain = drainMatch ? drainMatch[1] : "OFF";
+
+        let motor = "OFF";
+        if (kiriMatch && kiriMatch[1] === "ON") motor = "KIRI";
+        else if (kananMatch && kananMatch[1] === "ON") motor = "KANAN";
+        else if (motorMatch) motor = motorMatch[1];
+
+        updateHardwareUI(water, inlet, drain, motor);
+
+        if (l1Match) updateUIStatusLampu(1, l1Match[1] === "ON");
+        if (l2Match) updateUIStatusLampu(2, l2Match[1] === "ON");
+        if 
