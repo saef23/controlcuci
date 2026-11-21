@@ -123,10 +123,13 @@ function kirimNotifikasiSelesai() {
 // ==================== PERINTAH SUARA KONTINYU & RESPON AUDIO ====================
 let recognition = null;
 let isContinuousActive = false;
+let wakeWordUnlockedUntil = 0; // Jendela waktu (ms) setelah dipanggil "abem"
+const WAKE_WORD = "abem";
+const FOLLOW_UP_WINDOW_MS = 8000; // 8 detik menunggu perintah lanjutan setelah "Siap bos"
 
 function toggleVoiceControl() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
+
     if (!SpeechRecognition) {
         alert("Browser kamu tidak mendukung Web Speech API. Gunakan Google Chrome.");
         return;
@@ -137,28 +140,31 @@ function toggleVoiceControl() {
         recognition.lang = 'id-ID';
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
-        recognition.continuous = true; 
+        recognition.continuous = true;
 
-        recognition.onstart = function() {
+        recognition.onstart = function () {
             isContinuousActive = true;
+            wakeWordUnlockedUntil = 0;
             updateVoiceBtnUI(true);
-            log("[Voice] Mode Asisten Suara Aktif. Silakan bicara kapan saja...");
+            log(`[Voice] Mode Asisten Suara Aktif. Awali perintah dengan kata "${WAKE_WORD}".`);
         };
 
-        recognition.onresult = function(event) {
-            const speechResult = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
+        recognition.onresult = function (event) {
+            const speechResult = event.results[event.results.length - 1][0].transcript
+                .toLowerCase()
+                .trim();
             log(`[Voice Mendengar]: "${speechResult}"`);
-            prosesPerintahSuara(speechResult);
+            handleWakeWordDanPerintah(speechResult);
         };
 
-        recognition.onerror = function(event) {
+        recognition.onerror = function (event) {
             log("[Voice Error]: " + event.error);
             if (event.error === 'no-speech' && isContinuousActive) {
                 return;
             }
         };
 
-        recognition.onend = function() {
+        recognition.onend = function () {
             if (isContinuousActive) {
                 try {
                     recognition.start();
@@ -166,6 +172,7 @@ function toggleVoiceControl() {
                     console.log("Restart mic error:", e);
                 }
             } else {
+                wakeWordUnlockedUntil = 0;
                 updateVoiceBtnUI(false);
                 log("[Voice] Asisten Suara Dimatikan.");
             }
@@ -174,11 +181,41 @@ function toggleVoiceControl() {
 
     if (isContinuousActive) {
         isContinuousActive = false;
+        wakeWordUnlockedUntil = 0;
         recognition.stop();
         ucap("Asisten suara dimatikan.");
     } else {
         recognition.start();
-        ucap("Asisten suara siap. Silakan berikan perintah.");
+        ucap("Asisten suara siap. Panggil abem sebelum memberi perintah.");
+    }
+}
+
+function handleWakeWordDanPerintah(rawText) {
+    const sekarang = Date.now();
+    const wakeRegex = /\babem\b/i;
+    const punyaWakeWord = wakeRegex.test(rawText);
+
+    if (punyaWakeWord) {
+        const setelahWake = rawText.replace(wakeRegex, " ").replace(/\s+/g, " ").trim();
+
+        if (!setelahWake) {
+            wakeWordUnlockedUntil = sekarang + FOLLOW_UP_WINDOW_MS;
+            log('[Voice] Wake word "abem" terdeteksi -> Balas: "Siap bos"');
+            ucap("Siap bos");
+            return;
+        }
+
+        wakeWordUnlockedUntil = 0;
+        log(`[Voice] Wake word "abem" terdeteksi -> Eksekusi: "${setelahWake}"`);
+        prosesPerintahSuara(setelahWake);
+        return;
+    }
+
+    if (sekarang <= wakeWordUnlockedUntil) {
+        wakeWordUnlockedUntil = 0;
+        prosesPerintahSuara(rawText);
+    } else {
+        log(`[Voice] Diabaikan (tidak diawali kata kunci "${WAKE_WORD}"): "${rawText}"`);
     }
 }
 
@@ -186,7 +223,7 @@ function updateVoiceBtnUI(aktif) {
     const btn = document.getElementById("btnVoice");
     if (!btn) return;
     if (aktif) {
-        btn.innerText = "🎙️ Asisten Suara: STANDBY (Mendengarkan...)";
+        btn.innerText = '🎙️ Asisten Suara: STANDBY (Panggil "Abem")';
         btn.style.background = "#2e7d32";
         btn.style.borderColor = "#4caf50";
     } else {
@@ -251,7 +288,7 @@ function prosesPerintahSuara(text) {
             durasi = parseInt(match[0]);
         }
         durasi = Math.min(Math.max(durasi, 1), 7);
-        
+
         const slider = document.getElementById("sliderDurasi");
         if (slider) {
             slider.value = durasi;
@@ -261,7 +298,7 @@ function prosesPerintahSuara(text) {
         ucap(`Siap, memproses peras selama ${durasi} menit.`);
         log(`[Voice Exec] Menjalankan Spin Custom (${durasi}m)`);
         kirimPerintah(`CMD:4:${durasi}`);
-        
+
     } else if (text.includes("cuci saja")) {
         let durasi = 10;
         const match = text.match(/\d+/);
@@ -279,7 +316,7 @@ function prosesPerintahSuara(text) {
         ucap(`Siap, mencuci saja selama ${durasi} menit.`);
         log(`[Voice Exec] Menjalankan Cuci Saja Custom (${durasi}m)`);
         kirimPerintah(`CMD:5:${durasi}`);
-        
+
     } else if (text.includes("stop") || text.includes("darurat") || text.includes("berhenti")) {
         ucap("Perhatian! Darurat dihentikan!");
         log("[Voice Exec] STOP DARURAT");
@@ -536,87 +573,5 @@ function prosesPayloadData(payload) {
         if (l2Match) updateUIStatusLampu(2, l2Match[1] === "ON");
         if (l3Match) updateUIStatusLampu(3, l3Match[1] === "ON");
         if (l4Match) updateUIStatusLampu(4, l4Match[1] === "ON");
-
-    } else if (payload.includes("SELESAI") || payload.includes("DIHENTIKAN")) {
-        stopLapTimer();
-        totalDurasiDetik = 0;
-        const statusAkhir = payload.includes("SELESAI") ? "SELESAI" : "DIHENTIKAN";
-
-        updateElemenTeks("namaProsesAktif", statusAkhir);
-        updateElemenTeks("prosesStepTimer", "0s");
-        updateElemenTeks("percentLabel", statusAkhir === "SELESAI" ? "100%" : "0%");
-        setProgressRing(statusAkhir === "SELESAI" ? 100 : 0);
-        updateHardwareUI("PENUH", "OFF", "OFF", "OFF");
-        log("ESP32: " + payload);
-
-        if (statusAkhir === "SELESAI") {
-            kirimNotifikasiSelesai();
-        }
-    } else {
-        updateElemenTeks("namaProsesAktif", payload.replace("ESP32:", "").trim().toUpperCase());
-        log("ESP32: " + payload);
     }
-}
-
-// ==================== UTILITAS UI ====================
-function updateElemenTeks(id, teks) {
-    const elem = document.getElementById(id);
-    if (elem) elem.innerText = teks;
-}
-
-function updateStatusUI(teks, bg, warnaTeks) {
-    const statusElem = document.getElementById("statusKoneksi");
-    if (!statusElem) return;
-    statusElem.innerText = teks;
-    statusElem.style.background = bg;
-    statusElem.style.color = warnaTeks;
-}
-
-function setProgressRing(percent) {
-    const circle = document.getElementById("circleProgress");
-    if (!circle) return;
-    circle.style.strokeDashoffset = circumference - (percent / 100 * circumference);
-}
-
-function startLapTimer() {
-    stopLapTimer();
-    lapDetikTotal = 0;
-    prosesSebelumnya = "";
-    lapInterval = setInterval(() => {
-        lapDetikTotal++;
-        const menit = String(Math.floor(lapDetikTotal / 60)).padStart(2, '0');
-        const detik = String(lapDetikTotal % 60).padStart(2, '0');
-        updateElemenTeks("totalLapTimer", `Total: ${menit}:${detik}`);
-    }, 1000);
-}
-
-function stopLapTimer() {
-    if (lapInterval) clearInterval(lapInterval);
-    lapInterval = null;
-    prosesSebelumnya = "";
-}
-
-function updateHardwareUI(water, inlet, drain, motor) {
-    updateElemenTeks("statusWaterVal", water);
-    updateElemenTeks("statusInletVal", inlet);
-    updateElemenTeks("statusDrainVal", drain);
-    updateElemenTeks("statusMotorVal", motor);
-
-    const hwWater = document.getElementById("hwWater");
-    const hwInlet = document.getElementById("hwInlet");
-    const hwDrain = document.getElementById("hwDrain");
-    const hwMotor = document.getElementById("hwMotor");
-
-    if (hwWater) hwWater.classList.toggle("active", water === "PENUH");
-    if (hwInlet) hwInlet.classList.toggle("active", inlet === "ON");
-    if (hwDrain) hwDrain.classList.toggle("active", drain === "ON");
-    if (hwMotor) hwMotor.classList.toggle("active", motor !== "OFF");
-}
-
-function log(pesan) {
-    const logBox = document.getElementById("logTerminal");
-    if (!logBox) return;
-    const waktu = new Date().toLocaleTimeString('id-ID', { hour12: false });
-    logBox.innerHTML += `[${waktu}] ${pesan}<br>`;
-    logBox.scrollTop = logBox.scrollHeight;
 }
